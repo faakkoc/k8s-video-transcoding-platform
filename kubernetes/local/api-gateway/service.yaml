@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: video-transcoding
+  labels:
+    app: api-gateway
+    component: backend
+spec:
+  # Service type: ClusterIP for internal access
+  # Later use LoadBalancer or Ingress for external access
+  type: ClusterIP
+
+  selector:
+    app: api-gateway
+
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80          # Service port (internal cluster)
+    targetPort: http  # Container port (8000)
+
+  # Session affinity: None (stateless API)
+  sessionAffinity: None
