@@ -141,7 +141,7 @@ This project is currently in active development as part of an academic research 
 ### Roadmap
 
 - [x] Setup development environment
-- [ ] Implement API Gateway
+- [x] Implement API Gateway
 - [ ] Implement Transcoding Worker
 - [ ] Implement Frontend
 - [ ] Local Kubernetes deployment
