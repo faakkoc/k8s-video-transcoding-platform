@@ -132,7 +132,7 @@ async def upload_video(
             worker_image=settings.transcoding_worker_image
         )
 
-        print(f"🎬 Transcoding job created:")
+        print(f"[JOB] Transcoding job created:")
         print(f"   Job Name: {job_info['job_name']}")
         print(f"   Namespace: {job_info['namespace']}")
         print(f"   Input: {unique_filename}")
@@ -147,10 +147,10 @@ async def upload_video(
             detail=f"Failed to create transcoding job: {str(e)}"
         )
 
-    print(f"📹 Video uploaded: {unique_filename}")
-    print(f"🆔 Job ID: {job_id}")
-    print(f"🎯 Preset: {preset.value}")
-    print(f"📏 File size: {os.path.getsize(upload_path) / (1024*1024):.2f} MB")
+    print(f"[UPLOAD] Video uploaded: {unique_filename}")
+    print(f"[ID] Job ID: {job_id}")
+    print(f"[PRESET] Preset: {preset.value}")
+    print(f"[SIZE] File size: {os.path.getsize(upload_path) / (1024*1024):.2f} MB")
 
     # Step 8: Return job information
     return JobResponse(

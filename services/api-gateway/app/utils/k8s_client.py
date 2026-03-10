@@ -195,7 +195,7 @@ class KubernetesJobClient:
                 body=job
             )
 
-            print(f"✅ Kubernetes Job created: {job_name}")
+            print(f"[OK] Kubernetes Job created: {job_name}")
 
             return {
                 "job_name": job_name,
@@ -205,7 +205,7 @@ class KubernetesJobClient:
             }
 
         except ApiException as e:
-            print(f"❌ Failed to create job: {e}")
+            print(f"[ERROR] Failed to create job: {e}")
             raise
 
 
@@ -253,7 +253,7 @@ class KubernetesJobClient:
         except ApiException as e:
             if e.status == 404:
                 return None
-            print(f"❌ Failed to get job status: {e}")
+            print(f"[ERROR] Failed to get job status: {e}")
             raise
 
 
@@ -277,13 +277,13 @@ class KubernetesJobClient:
                 propagation_policy="Background"  # Also delete pods
             )
 
-            print(f"🗑️ Job deleted: {job_name}")
+            print(f"[DELETE] Job deleted: {job_name}")
             return True
 
         except ApiException as e:
             if e.status == 404:
                 return False
-            print(f"❌ Failed to delete job: {e}")
+            print(f"[ERROR] Failed to delete job: {e}")
             raise
 
 
@@ -321,7 +321,7 @@ class KubernetesJobClient:
             return result
 
         except ApiException as e:
-            print(f"❌ Failed to list jobs: {e}")
+            print(f"[ERROR] Failed to list jobs: {e}")
             raise
 
 

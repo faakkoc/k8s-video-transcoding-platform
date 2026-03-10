@@ -65,10 +65,10 @@ async def startup_event():
     os.makedirs(settings.upload_dir, exist_ok=True)
     os.makedirs(settings.output_dir, exist_ok=True)
 
-    print(f"🚀 {settings.app_name} v{settings.app_version} started")
-    print(f"📁 Upload directory: {settings.upload_dir}")
-    print(f"📁 Output directory: {settings.output_dir}")
-    print(f"🔧 Kubernetes namespace: {settings.kubernetes_namespace}")
+    print(f"[START] {settings.app_name} v{settings.app_version} started")
+    print(f"[DIR] Upload directory: {settings.upload_dir}")
+    print(f"[DIR] Output directory: {settings.output_dir}")
+    print(f"[CONFIG] Kubernetes namespace: {settings.kubernetes_namespace}")
 
 
 @app.on_event("shutdown")
@@ -77,4 +77,4 @@ async def shutdown_event():
     Runs on application shutdown.
     Clean up resources, close connections, etc.
     """
-    print(f"👋 {settings.app_name} shutting down")
+    print(f"[SHUTDOWN] {settings.app_name} shutting down")
