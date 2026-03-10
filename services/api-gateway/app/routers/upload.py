@@ -6,6 +6,8 @@ Handles:
 - File validation
 - Temporary storage
 - Kubernetes Job creation
+
+Date: 05.03.2026
 """
 
 import os
@@ -25,6 +27,7 @@ from app.utils.validators import (
     validate_file_size,
     generate_unique_filename,
 )
+from app.utils.k8s_client import get_k8s_client
 
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
@@ -100,16 +103,56 @@ async def upload_video(
     # Step 5: Generate unique job ID
     job_id = f"transcode-{uuid.uuid4().hex[:12]}"
 
-    # Step 6: Create Kubernetes Job (TODO: Implement in next step)
-    # For now, we just return the response without actually creating the job
-    # This will be implemented when we have the transcoding worker
+    # Step 6: Generate output filename
+    # Format: {timestamp}_{original_name}_{preset}.mp4
+    name_without_ext = os.path.splitext(unique_filename)[0]
+    output_filename = f"{name_without_ext}_{preset.value}.mp4"
+
+    # Step 7: Create Kubernetes Job
+    # IMPORTANT: Currently using emptyDir volumes which are per-pod.
+    # This means the transcoding job pod CANNOT access the uploaded file
+    # from the API gateway pod. This is a known limitation.
+    #
+    # WORKAROUND for now: We still create the job to demonstrate the workflow,
+    # but it will fail because input file is not accessible.
+    #
+    # SOLUTION (TODO): Implement shared storage (MinIO or PersistentVolume)
+    # so all pods can access the same files.
+    try:
+        k8s_client = get_k8s_client(
+            namespace=settings.kubernetes_namespace,
+            in_cluster=settings.in_cluster
+        )
+
+        job_info = k8s_client.create_transcoding_job(
+            job_id=job_id,
+            input_filename=unique_filename,
+            output_filename=output_filename,
+            preset=preset.value,
+            worker_image=settings.transcoding_worker_image
+        )
+
+        print(f"🎬 Transcoding job created:")
+        print(f"   Job Name: {job_info['job_name']}")
+        print(f"   Namespace: {job_info['namespace']}")
+        print(f"   Input: {unique_filename}")
+        print(f"   Output: {output_filename}")
+
+    except Exception as e:
+        # Job creation failed - clean up uploaded file
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create transcoding job: {str(e)}"
+        )
 
     print(f"📹 Video uploaded: {unique_filename}")
     print(f"🆔 Job ID: {job_id}")
     print(f"🎯 Preset: {preset.value}")
     print(f"📏 File size: {os.path.getsize(upload_path) / (1024*1024):.2f} MB")
 
-    # Step 7: Return job information
+    # Step 8: Return job information
     return JobResponse(
         job_id=job_id,
         status=JobStatus.PENDING,
