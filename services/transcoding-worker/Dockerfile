@@ -1,9 +1,9 @@
 # Transcoding Worker Dockerfile
-# Using jrottenberg/ffmpeg Debian variant (has Python)
+# FFmpeg + Python + boto3 for MinIO integration
 
 FROM jrottenberg/ffmpeg:4.4-ubuntu
 
-# Install Python
+# Install Python and pip
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     python3 \
@@ -14,19 +14,20 @@ RUN apt-get update && \
 # Create working directory
 WORKDIR /app
 
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
 # Copy worker scripts
 COPY ffmpeg_presets.py .
 COPY worker.py .
 
-# Make worker executable
-RUN chmod +x worker.py
-
-# Create directories for input/output
-RUN mkdir -p /tmp/uploads /tmp/outputs
+# Create temp directory for transcoding
+RUN mkdir -p /tmp
 
 # Run as non-root user for security
 RUN useradd -m -u 1000 worker && \
-    chown -R worker:worker /app /tmp/uploads /tmp/outputs
+    chown -R worker:worker /app /tmp
 
 USER worker
 

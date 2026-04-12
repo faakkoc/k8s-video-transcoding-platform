@@ -1,0 +1,6 @@
+# Transcoding Worker Dependencies
+
+# S3 Client (for MinIO)
+boto3==1.35.36
+
+# No other dependencies needed - worker uses Python stdlib for everything else

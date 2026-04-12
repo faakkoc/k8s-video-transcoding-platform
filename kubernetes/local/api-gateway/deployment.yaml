@@ -8,49 +8,34 @@ metadata:
     component: backend
     tier: api
 spec:
-  # Number of replica pods
   replicas: 2
-
-  # Deployment strategy: Rolling update (zero downtime)
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1        # Max 1 extra pod during update
-      maxUnavailable: 0  # Keep all pods running during update
-
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: api-gateway
-
   template:
     metadata:
       labels:
         app: api-gateway
         component: backend
         tier: api
-
     spec:
-      # Service Account for Kubernetes API access (creating Jobs)
       serviceAccountName: api-gateway
-
       containers:
       - name: api-gateway
         image: api-gateway:latest
-        imagePullPolicy: IfNotPresent  # For local development
-
+        imagePullPolicy: IfNotPresent
         ports:
         - name: http
           containerPort: 8000
           protocol: TCP
-
-        # Environment variables from ConfigMap and Secrets
         env:
         - name: APP_NAME
           value: "Video Transcoding API Gateway"
-        - name: APP_VERSION
-          value: "0.1.0"
-        - name: DEBUG
-          value: "false"
         - name: KUBERNETES_NAMESPACE
           valueFrom:
             fieldRef:
@@ -59,48 +44,32 @@ spec:
           value: "true"
         - name: TRANSCODING_WORKER_IMAGE
           value: "transcoding-worker:latest"
-
-        # Resource limits and requests
+        - name: S3_ENDPOINT
+          value: "http://minio:9000"
+        - name: S3_ACCESS_KEY
+          value: "minioadmin"
+        - name: S3_SECRET_KEY
+          value: "minioadmin123"
+        - name: INPUT_BUCKET
+          value: "uploads"
+        - name: OUTPUT_BUCKET
+          value: "outputs"
         resources:
           requests:
             memory: "128Mi"
-            cpu: "100m"      # 0.1 CPU core
+            cpu: "100m"
           limits:
             memory: "512Mi"
-            cpu: "500m"      # 0.5 CPU core
-
-        # Liveness probe: Restart container if unhealthy
+            cpu: "500m"
         livenessProbe:
           httpGet:
             path: /api/v1/health
             port: http
           initialDelaySeconds: 10
           periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 3
-
-        # Readiness probe: Remove from service if not ready
         readinessProbe:
           httpGet:
             path: /api/v1/ready
             port: http
           initialDelaySeconds: 5
           periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
-
-        # Volume mounts for temporary storage
-        volumeMounts:
-        - name: uploads
-          mountPath: /tmp/uploads
-        - name: outputs
-          mountPath: /tmp/outputs
-
-      # Volumes (emptyDir for now, later PersistentVolume or S3)
-      volumes:
-      - name: uploads
-        emptyDir:
-          sizeLimit: 10Gi
-      - name: outputs
-        emptyDir:
-          sizeLimit: 10Gi
