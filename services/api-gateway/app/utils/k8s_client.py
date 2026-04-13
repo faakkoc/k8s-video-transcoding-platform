@@ -86,8 +86,8 @@ def create_transcoding_job(
                     containers=[
                         client.V1Container(
                             name="transcoder",
-                            image="kind-registry:5000/transcoding-worker:v1",
-                            image_pull_policy="Always",  # Kind: use local image
+                            image="transcoding-worker:latest",
+                            image_pull_policy="IfNotPresent",  # Kind: use local image
                             env=[
                                 # S3 Configuration
                                 client.V1EnvVar(
