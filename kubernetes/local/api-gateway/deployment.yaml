@@ -27,8 +27,8 @@ spec:
       serviceAccountName: api-gateway
       containers:
       - name: api-gateway
-        image: api-gateway:latest
-        imagePullPolicy: IfNotPresent
+        image: localhost:5000/api-gateway:v1
+        imagePullPolicy: Always
         ports:
         - name: http
           containerPort: 8000

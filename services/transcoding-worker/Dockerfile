@@ -13,8 +13,7 @@ RUN apt-get update && \
 
 # Create working directory
 WORKDIR /app
-
-# Copy requirements and install dependencies
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
@@ -31,5 +30,7 @@ RUN useradd -m -u 1000 worker && \
 
 USER worker
 
-# Run worker
+# CRITICAL: Override base image ENTRYPOINT (jrottenberg/ffmpeg sets ENTRYPOINT ["ffmpeg"])
+# Without this, CMD becomes arguments to ffmpeg → "ffmpeg python worker.py" → crash
+ENTRYPOINT []
 CMD ["python", "worker.py"]
