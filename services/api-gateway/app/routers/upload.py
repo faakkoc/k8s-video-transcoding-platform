@@ -1,179 +1,131 @@
 """
-Upload router for video transcoding platform.
+Upload router - handles video file uploads and job creation.
 
-Handles:
-- Video file uploads
-- File validation
-- Temporary storage
-- Kubernetes Job creation
-
-Date: 05.03.2026
+Updated: 09.04.2026 - MinIO S3 integration
 """
 
-import os
-import uuid
-import aiofiles
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from app.models.job import JobResponse
+from app.utils.validators import validate_video_file
+from app.utils.k8s_client import create_transcoding_job
+from app.utils.s3_client import get_s3_client
+import logging
+import time
 from datetime import datetime
+from io import BytesIO
 
-from app.config import Settings, get_settings
-from app.models.job import (
-    TranscodingPreset,
-    JobStatus,
-    JobResponse,
-)
-from app.utils.validators import (
-    validate_video_file,
-    validate_file_size,
-    generate_unique_filename,
-)
-from app.utils.k8s_client import get_k8s_client
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Supported presets
+SUPPORTED_PRESETS = ["480p", "720p", "1080p", "4k"]
 
 
-router = APIRouter(prefix="/upload", tags=["Upload"])
-
-
-@router.post("", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/upload", response_model=JobResponse, status_code=201)
 async def upload_video(
-        file: UploadFile = File(..., description="Video file to upload"),
-        preset: TranscodingPreset = Form(
-            default=TranscodingPreset.HD_720P,
-            description="Target transcoding quality"
-        ),
-        settings: Settings = Depends(get_settings),
+        file: UploadFile = File(...),
+        preset: str = Form(...)
 ):
     """
-    Upload video for transcoding.
+    Upload video file and create transcoding job.
 
-    **Workflow:**
-    1. Validate file format and size
-    2. Save to temporary storage
-    3. Create Kubernetes Job for transcoding
-    4. Return job ID for status tracking
+    Flow:
+    1. Validate file (type, size)
+    2. Upload to MinIO (uploads bucket)
+    3. Create Kubernetes Job with S3 paths
+    4. Return job_id
 
-    **Supported Formats:**
-    - MP4 (.mp4)
-    - QuickTime (.mov)
-    - AVI (.avi)
-    - Matroska (.mkv)
-    - WebM (.webm)
+    Args:
+        file: Video file to upload
+        preset: Transcoding preset (480p, 720p, 1080p, 4k)
 
-    **Max File Size:** 500 MB
-
-    **Returns:**
-    - job_id: Unique identifier for tracking
-    - status: Initial status (pending)
-    - created_at: Timestamp
+    Returns:
+        JobResponse with job_id and status
     """
+    logger.info(f"[START] Upload request - File: {file.filename}, Preset: {preset}")
 
-    # Step 1: Validate file format
-    original_filename, extension = validate_video_file(
-        file,
-        max_size_mb=settings.max_upload_size_mb
-    )
+    # 1. Validate preset
+    if preset not in SUPPORTED_PRESETS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid preset. Supported: {', '.join(SUPPORTED_PRESETS)}"
+        )
 
-    # Step 2: Generate unique filename
-    unique_filename = generate_unique_filename(original_filename)
-    upload_path = os.path.join(settings.upload_dir, unique_filename)
-
-    # Step 3: Save file to temporary storage
+    # 2. Validate file
     try:
-        # Read and write file in chunks (memory-efficient for large files)
-        async with aiofiles.open(upload_path, 'wb') as out_file:
-            chunk_size = 1024 * 1024  # 1MB chunks
-            while content := await file.read(chunk_size):
-                await out_file.write(content)
+        validate_video_file(file)
+    except ValueError as e:
+        logger.error(f"[ERROR] Validation failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # 3. Generate unique filename
+    timestamp = int(time.time())
+    original_filename = file.filename
+    input_key = f"{timestamp}_{original_filename}"
+    output_key = f"{timestamp}_{original_filename.rsplit('.', 1)[0]}_{preset}.mp4"
+
+    logger.info(f"[INFO] S3 Keys - Input: {input_key}, Output: {output_key}")
+
+    # 4. Upload to MinIO
+    try:
+        s3_client = get_s3_client()
+
+        # Read file content into memory
+        file_content = await file.read()
+        file_obj = BytesIO(file_content)
+
+        # Upload to uploads bucket
+        success = s3_client.upload_file(
+            file_obj=file_obj,
+            bucket="uploads",
+            key=input_key
+        )
+
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to upload file to storage"
+            )
+
+        logger.info(f"[OK] File uploaded to s3://uploads/{input_key}")
 
     except Exception as e:
-        # Clean up on error
-        if os.path.exists(upload_path):
-            os.remove(upload_path)
+        logger.error(f"[ERROR] Upload to S3 failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save file: {str(e)}"
+            status_code=500,
+            detail=f"Storage upload failed: {str(e)}"
         )
 
-    # Step 4: Validate file size after upload
+    # 5. Create Kubernetes Job
     try:
-        validate_file_size(upload_path, max_size_mb=settings.max_upload_size_mb)
-    except HTTPException:
-        # File too large, already deleted by validator
-        raise
-
-    # Step 5: Generate unique job ID
-    job_id = f"transcode-{uuid.uuid4().hex[:12]}"
-
-    # Step 6: Generate output filename
-    # Format: {timestamp}_{original_name}_{preset}.mp4
-    name_without_ext = os.path.splitext(unique_filename)[0]
-    output_filename = f"{name_without_ext}_{preset.value}.mp4"
-
-    # Step 7: Create Kubernetes Job
-    # IMPORTANT: Currently using emptyDir volumes which are per-pod.
-    # This means the transcoding job pod CANNOT access the uploaded file
-    # from the API gateway pod. This is a known limitation.
-    #
-    # WORKAROUND for now: We still create the job to demonstrate the workflow,
-    # but it will fail because input file is not accessible.
-    #
-    # SOLUTION (TODO): Implement shared storage (MinIO or PersistentVolume)
-    # so all pods can access the same files.
-    try:
-        k8s_client = get_k8s_client(
-            namespace=settings.kubernetes_namespace,
-            in_cluster=settings.in_cluster
+        job_id = create_transcoding_job(
+            input_key=input_key,
+            output_key=output_key,
+            preset=preset
         )
 
-        job_info = k8s_client.create_transcoding_job(
+        logger.info(f"[OK] Job created: {job_id}")
+
+        return JobResponse(
             job_id=job_id,
-            input_filename=unique_filename,
-            output_filename=output_filename,
-            preset=preset.value,
-            worker_image=settings.transcoding_worker_image
+            status="pending",
+            input_filename=original_filename,
+            preset=preset,
+            created_at=datetime.utcnow(),
+            message="Job created successfully. File uploaded to storage."
         )
-
-        print(f"[JOB] Transcoding job created:")
-        print(f"   Job Name: {job_info['job_name']}")
-        print(f"   Namespace: {job_info['namespace']}")
-        print(f"   Input: {unique_filename}")
-        print(f"   Output: {output_filename}")
 
     except Exception as e:
-        # Job creation failed - clean up uploaded file
-        if os.path.exists(upload_path):
-            os.remove(upload_path)
+        logger.error(f"[ERROR] Job creation failed: {e}")
+
+        # Cleanup: Delete uploaded file if job creation fails
+        try:
+            s3_client.delete_file(bucket="uploads", key=input_key)
+            logger.info(f"[CLEANUP] Deleted s3://uploads/{input_key}")
+        except:
+            pass
+
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create transcoding job: {str(e)}"
+            status_code=500,
+            detail=f"Job creation failed: {str(e)}"
         )
-
-    print(f"[UPLOAD] Video uploaded: {unique_filename}")
-    print(f"[ID] Job ID: {job_id}")
-    print(f"[PRESET] Preset: {preset.value}")
-    print(f"[SIZE] File size: {os.path.getsize(upload_path) / (1024*1024):.2f} MB")
-
-    # Step 8: Return job information
-    return JobResponse(
-        job_id=job_id,
-        status=JobStatus.PENDING,
-        input_filename=original_filename,
-        preset=preset,
-        created_at=datetime.utcnow(),
-    )
-
-
-@router.get("/test")
-async def test_upload_endpoint():
-    """
-    Test endpoint to verify upload router is working.
-
-    Returns basic information about the upload configuration.
-    """
-    settings = get_settings()
-
-    return {
-        "message": "Upload endpoint is ready",
-        "upload_dir": settings.upload_dir,
-        "max_upload_size_mb": settings.max_upload_size_mb,
-        "allowed_formats": [".mp4", ".mov", ".avi", ".mkv", ".webm"],
-    }
