@@ -2,7 +2,7 @@
 
 Cloud-native video transcoding platform using Kubernetes, FFmpeg, and microservices architecture.
 
-## 📋 Project Overview
+## Project Overview
 
 This project is part of a **Scientific Project** at Hochschule RheinMain, demonstrating the benefits of Kubernetes for media technology workflows through a practical implementation of a video transcoding platform.
 
@@ -16,40 +16,33 @@ This project is part of a **Scientific Project** at Hochschule RheinMain, demons
 ### Use Case: Video Transcoding
 
 - Upload videos via web interface
-- Transcode to multiple formats (720p, 1080p, different codecs)
+- Transcode to multiple formats (480p, 720p, 1080p, 4k)
 - Horizontal scaling based on workload
-- Job queue management
+- Job status monitoring
 - Download processed videos
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Microservices
 
 ```
-┌──────────────┐     ┌─────────────┐     ┌──────────────┐
-│   Frontend   │────▶│ API Gateway │────▶│  Message     │
-│   (React)    │     │  (FastAPI)  │     │  Queue       │
-└──────────────┘     └─────────────┘     └──────┬───────┘
-                                                 │
-                                                 ▼
-                                    ┌────────────────────┐
-                                    │  Job Controller    │
-                                    │  (K8s Jobs)        │
-                                    └─────────┬──────────┘
-                                              │
-                                              ▼
-                                    ┌─────────────────────┐
-                                    │ Transcoding Workers │
-                                    │ (FFmpeg + Python)   │
-                                    └──────────┬──────────┘
-                                               │
-                                               ▼
-                                    ┌──────────────────────┐
-                                    │  Object Storage      │
-                                    │  (Input/Output)      │
-                                    └──────────────────────┘
+┌──────────────┐     ┌─────────────┐
+│   Frontend   │────▶│ API Gateway │
+│  (optional)  │     │  (FastAPI)  │
+└──────────────┘     └──────┬──────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+              ▼              ▼              ▼
+       Create K8s Job   MinIO S3      Job Status
+              │         Object        & Download
+              ▼         Storage
+   ┌─────────────────────┐   ▲
+   │ Transcoding Worker  │───┘
+   │  (FFmpeg + Python)  │
+   └─────────────────────┘
 ```
 
 ### Technology Stack
@@ -60,11 +53,8 @@ This project is part of a **Scientific Project** at Hochschule RheinMain, demons
 | **Orchestration** | Kubernetes | Container management & scaling |
 | **Local Dev** | Kind | Local Kubernetes cluster |
 | **API Gateway** | FastAPI (Python) | REST API, job management |
-| **Frontend** | React + Vite | User interface |
 | **Transcoding** | FFmpeg | Video processing |
-| **Message Queue** | RabbitMQ / Redis | Async job distribution |
-| **Storage** | S3-compatible Object Storage | Video file storage |
-| **Database** | PostgreSQL | Job metadata |
+| **Object Storage** | MinIO (local) / GCS / StackIT | Video file storage |
 | **IaC** | Terraform | Infrastructure provisioning |
 | **CI/CD** | GitHub Actions | Automated deployment |
 
@@ -82,9 +72,7 @@ k8s-video-transcoding-platform/
 │   ├── 05-deployment/
 │   └── 06-lessons-learned/
 ├── services/                      # Microservices
-│   ├── frontend/                  # React UI
 │   ├── api-gateway/               # FastAPI service
-│   ├── job-controller/            # K8s Job manager
 │   └── transcoding-worker/        # FFmpeg worker
 ├── kubernetes/                    # K8s manifests
 │   ├── local/                     # Kind cluster
@@ -100,10 +88,11 @@ k8s-video-transcoding-platform/
 
 ### Prerequisites
 
-- Docker Desktop
+- Docker
 - Kind
 - kubectl
-- WSL2 (if on Windows)
+- Helm
+- Fish shell (recommended, scripts use Fish syntax)
 
 ### Local Development
 
@@ -115,13 +104,35 @@ cd k8s-video-transcoding-platform
 # Create local Kubernetes cluster
 ./scripts/setup-kind.sh
 
-# Deploy services
-./scripts/deploy-local.sh
+# Build and load images
+docker build -t api-gateway:latest services/api-gateway/
+docker build -t transcoding-worker:latest services/transcoding-worker/
+kind load docker-image api-gateway:latest --name video-transcoding
+kind load docker-image transcoding-worker:latest --name video-transcoding
+
+# Deploy MinIO
+helm repo add minio https://charts.min.io/
+helm install minio minio/minio --namespace video-transcoding \
+  --set rootUser=minioadmin --set rootPassword=minioadmin123 \
+  --set mode=standalone --set persistence.size=10Gi
+
+# Deploy API Gateway
+kubectl apply -f kubernetes/local/api-gateway/
 
 # Access application
-# Frontend: http://localhost:8080
-# API: http://localhost:8080/api
+kubectl port-forward -n video-transcoding svc/api-gateway 8080:80
+# API Docs: http://localhost:8080/api/v1/docs
 ```
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/health` | Liveness probe |
+| GET | `/api/v1/ready` | Readiness probe |
+| POST | `/api/v1/upload` | Upload video, create transcoding job |
+| GET | `/api/v1/jobs/{job_id}` | Get job status |
+| GET | `/api/v1/download/{job_id}` | Get presigned download URL |
 
 ## Documentation
 
@@ -136,23 +147,20 @@ Detailed documentation is available in the `docs/` directory:
 
 ## Development Status
 
-This project is currently in active development as part of an academic research project.
-
 ### Roadmap
 
 - [x] Setup development environment
-- [x] Implement API Gateway
-- [ ] Implement Transcoding Worker
-- [ ] Implement Frontend
-- [ ] Local Kubernetes deployment
-- [ ] GCP deployment
+- [x] Implement API Gateway (upload, job creation, status, download)
+- [x] Implement Transcoding Worker (FFmpeg + MinIO S3)
+- [x] Local Kubernetes deployment (Kind + MinIO)
+- [x] Job Status & Download Endpoints
+- [ ] Frontend (optional — Swagger UI used for development)
+- [ ] GCP deployment (GKE + Cloud Storage + Cloud SQL)
 - [ ] StackIT deployment
-- [ ] CI/CD pipelines
-- [ ] Production hardening
+- [ ] CI/CD pipelines (GitHub Actions)
 
 ---
 
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) for details
-

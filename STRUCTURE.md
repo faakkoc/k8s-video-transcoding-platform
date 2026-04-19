@@ -1,5 +1,9 @@
 # Projektstruktur
 
+> **Hinweis:** Diese Datei beschreibt die **geplante Zielstruktur** des Projekts.
+> Nicht alle Ordner und Dateien existieren bereits — sie werden im Laufe der
+> Entwicklung (GCP- und StackIT-Deployment, CI/CD) angelegt.
+
 Diese Datei dokumentiert die Ordnerstruktur des Projekts.
 
 ```
