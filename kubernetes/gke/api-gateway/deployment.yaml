@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: video-transcoding
+  labels:
+    app: api-gateway
+    component: backend
+    tier: api
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        component: backend
+        tier: api
+    spec:
+      serviceAccountName: api-gateway
+      containers:
+        - name: api-gateway
+          image: us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/api-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: APP_NAME
+              value: "Video Transcoding API Gateway"
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: IN_CLUSTER
+              value: "true"
+            - name: K8S_NAMESPACE
+              value: "video-transcoding"
+            - name: TRANSCODING_WORKER_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-config
+                  key: worker_image
+            # GCS Configuration (Workload Identity — no credentials needed)
+            - name: S3_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-config
+                  key: s3_endpoint
+            - name: INPUT_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-config
+                  key: input_bucket
+            - name: OUTPUT_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-config
+                  key: output_bucket
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/v1/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10

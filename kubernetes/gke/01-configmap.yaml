@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  namespace: video-transcoding
+data:
+  # Google Cloud Storage buckets (created by Terraform)
+  input_bucket: "k8s-transcoding-uploads"
+  output_bucket: "k8s-transcoding-outputs"
+
+  # GCS endpoint (boto3 compatible)
+  s3_endpoint: "https://storage.googleapis.com"
+
+  # Kubernetes
+  k8s_namespace: "video-transcoding"
+  worker_image: "us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/transcoding-worker:latest"
