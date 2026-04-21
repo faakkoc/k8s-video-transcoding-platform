@@ -49,7 +49,6 @@ kubeconfig
 .terraform/
 .terraform.lock.hcl
 terraform.tfvars
-*.tfvars
 
 # Environment Variables
 .env

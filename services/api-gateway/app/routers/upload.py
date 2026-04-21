@@ -124,7 +124,7 @@ async def upload_video(
         try:
             s3_client.delete_file(bucket=INPUT_BUCKET, key=input_key)
             logger.info(f"[CLEANUP] Deleted s3://uploads/{input_key}")
-        except:
+        except Exception:
             pass
 
         raise HTTPException(

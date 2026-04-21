@@ -5,7 +5,6 @@ Added: 19.04.2026
 """
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import RedirectResponse
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel
 from typing import Optional
