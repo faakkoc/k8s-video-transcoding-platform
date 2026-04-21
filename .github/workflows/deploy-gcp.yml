@@ -3,6 +3,16 @@ name: Deploy to GCP
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Run terraform apply after plan?"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 env:
   PROJECT_ID: k8s-transcoding-plattform
@@ -20,13 +30,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # Für Workload Identity Federation
+      id-token: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Authenticate to GCP (Workload Identity Federation)
+      - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
@@ -54,7 +64,7 @@ jobs:
           docker push ${{ env.REGISTRY }}/transcoding-worker:${{ github.sha }}
 
   # ------------------------------------------------------------------
-  # Job 2: Terraform Plan (immer, auch als Info bei jedem Merge)
+  # Job 2: Terraform Validate, Format Check & Plan
   # ------------------------------------------------------------------
   terraform-plan:
     name: Terraform Plan
@@ -83,17 +93,27 @@ jobs:
         working-directory: terraform/gcp
         run: terraform init
 
+      - name: Terraform Format Check
+        working-directory: terraform/gcp
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        working-directory: terraform/gcp
+        run: terraform validate
+
       - name: Terraform Plan
         working-directory: terraform/gcp
         run: terraform plan
 
   # ------------------------------------------------------------------
   # Job 3: Terraform Apply + kubectl rollout restart
+  # Wird nur ausgeführt wenn workflow_dispatch mit apply=true
   # ------------------------------------------------------------------
   terraform-apply:
     name: Terraform Apply & Deploy
     runs-on: ubuntu-latest
     needs: terraform-plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply == 'true' }}
     permissions:
       contents: read
       id-token: write

@@ -155,7 +155,7 @@ class TranscodingWorker:
         start_time = time.time()
 
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ffmpeg_args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
