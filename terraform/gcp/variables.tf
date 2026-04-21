@@ -32,3 +32,7 @@ variable "artifact_registry_name" {
   description = "Artifact Registry repository name"
   type        = string
 }
+variable "github_repository" {
+  description = "GitHub Repository im Format 'owner/repo' (z.B. 'faakkoc/k8s-video-transcoding-platform')"
+  type        = string
+}

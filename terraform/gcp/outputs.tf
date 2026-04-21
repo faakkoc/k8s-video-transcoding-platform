@@ -59,3 +59,13 @@ output "worker_hmac_secret" {
   value       = google_storage_hmac_key.transcoding_worker.secret
   sensitive   = true
 }
+# Diese Outputs werden als GitHub Actions Secrets/Variables gesetzt
+output "github_actions_service_account" {
+  description = "Service Account Email für GitHub Actions"
+  value       = google_service_account.github_actions.email
+}
+
+output "workload_identity_provider" {
+  description = "WIF Provider Resource Name für GitHub Actions"
+  value       = google_iam_workload_identity_pool_provider.github.name
+}
