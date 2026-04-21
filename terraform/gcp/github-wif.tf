@@ -3,7 +3,7 @@
 # -------------------------------------------------------------------
 
 resource "google_iam_workload_identity_pool" "github" {
-  workload_identity_pool_id = "github-actions-pool"
+  workload_identity_pool_id = "github-actions-pool-v2"
   display_name              = "GitHub Actions Pool"
   description               = "WIF Pool für GitHub Actions CI/CD"
 
@@ -16,7 +16,7 @@ resource "google_iam_workload_identity_pool" "github" {
 
 resource "google_iam_workload_identity_pool_provider" "github" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
-  workload_identity_pool_provider_id = "github-actions-provider"
+  workload_identity_pool_provider_id = "github-actions-provider-v2"
   display_name                       = "GitHub Actions Provider"
 
   oidc {
