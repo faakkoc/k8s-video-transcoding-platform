@@ -14,5 +14,9 @@ module "gke" {
   release_channel     = "REGULAR"
   deletion_protection = false
 
+  # Automatically grants the node service account access to Artifact Registry
+  # so that nodes can pull Docker images without additional IAM configuration
+  grant_registry_access = true
+
   depends_on = [google_project_service.apis]
 }

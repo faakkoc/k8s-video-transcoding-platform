@@ -37,3 +37,25 @@ output "kubectl_config_command" {
   description = "Command to configure kubectl for this cluster"
   value       = "gcloud container clusters get-credentials ${var.cluster_name} --region ${var.region} --project ${var.project_id}"
 }
+
+output "api_gateway_hmac_access_key" {
+  description = "HMAC Access Key ID for API Gateway (use for S3_ACCESS_KEY)"
+  value       = google_storage_hmac_key.api_gateway.access_id
+}
+
+output "api_gateway_hmac_secret" {
+  description = "HMAC Secret for API Gateway (use for S3_SECRET_KEY)"
+  value       = google_storage_hmac_key.api_gateway.secret
+  sensitive   = true
+}
+
+output "worker_hmac_access_key" {
+  description = "HMAC Access Key ID for Transcoding Worker"
+  value       = google_storage_hmac_key.transcoding_worker.access_id
+}
+
+output "worker_hmac_secret" {
+  description = "HMAC Secret for Transcoding Worker"
+  value       = google_storage_hmac_key.transcoding_worker.secret
+  sensitive   = true
+}

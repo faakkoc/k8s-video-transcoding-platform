@@ -83,14 +83,14 @@ def create_transcoding_job(
                     containers=[
                         client.V1Container(
                             name="transcoder",
-                            image="transcoding-worker:latest",
-                            image_pull_policy="IfNotPresent",
+                            image=os.getenv("TRANSCODING_WORKER_IMAGE", "transcoding-worker:latest"),
+                            image_pull_policy=os.getenv("IMAGE_PULL_POLICY", "IfNotPresent"),
                             env=[
-                                client.V1EnvVar(name="S3_ENDPOINT", value="http://minio:9000"),
-                                client.V1EnvVar(name="S3_ACCESS_KEY", value="minioadmin"),
-                                client.V1EnvVar(name="S3_SECRET_KEY", value="minioadmin123"),
-                                client.V1EnvVar(name="INPUT_BUCKET", value="uploads"),
-                                client.V1EnvVar(name="OUTPUT_BUCKET", value="outputs"),
+                                client.V1EnvVar(name="S3_ENDPOINT", value=os.getenv("S3_ENDPOINT", "http://minio:9000")),
+                                client.V1EnvVar(name="S3_ACCESS_KEY", value=os.getenv("WORKER_S3_ACCESS_KEY", "minioadmin")),
+                                client.V1EnvVar(name="S3_SECRET_KEY", value=os.getenv("WORKER_S3_SECRET_KEY", "minioadmin123")),
+                                client.V1EnvVar(name="INPUT_BUCKET", value=os.getenv("INPUT_BUCKET", "uploads")),
+                                client.V1EnvVar(name="OUTPUT_BUCKET", value=os.getenv("OUTPUT_BUCKET", "outputs")),
                                 client.V1EnvVar(name="INPUT_KEY", value=input_key),
                                 client.V1EnvVar(name="OUTPUT_KEY", value=output_key),
                                 client.V1EnvVar(name="PRESET", value=preset),

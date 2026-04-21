@@ -3,7 +3,7 @@ Upload router - handles video file uploads and job creation.
 
 Updated: 09.04.2026 - MinIO S3 integration
 """
-
+import os
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from app.models.job import JobResponse
 from app.utils.validators import validate_video_file
@@ -16,6 +16,8 @@ from io import BytesIO
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+INPUT_BUCKET = os.getenv("INPUT_BUCKET", "uploads")
+OUTPUT_BUCKET = os.getenv("OUTPUT_BUCKET", "outputs")
 
 # Supported presets
 SUPPORTED_PRESETS = ["480p", "720p", "1080p", "4k"]
@@ -77,7 +79,7 @@ async def upload_video(
         # Upload to uploads bucket
         success = s3_client.upload_file(
             file_obj=file_obj,
-            bucket="uploads",
+            bucket=INPUT_BUCKET,
             key=input_key
         )
 
@@ -120,7 +122,7 @@ async def upload_video(
 
         # Cleanup: Delete uploaded file if job creation fails
         try:
-            s3_client.delete_file(bucket="uploads", key=input_key)
+            s3_client.delete_file(bucket=INPUT_BUCKET, key=input_key)
             logger.info(f"[CLEANUP] Deleted s3://uploads/{input_key}")
         except:
             pass

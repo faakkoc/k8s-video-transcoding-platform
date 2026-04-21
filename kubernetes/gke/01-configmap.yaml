@@ -11,6 +11,9 @@ data:
   # GCS endpoint (boto3 compatible)
   s3_endpoint: "https://storage.googleapis.com"
 
+  # GCS requires "auto" instead of an AWS region name
+  s3_region: "auto"
+
   # Kubernetes
   k8s_namespace: "video-transcoding"
   worker_image: "us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/transcoding-worker:latest"
