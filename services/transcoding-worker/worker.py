@@ -82,7 +82,7 @@ class TranscodingWorker:
             print(f"[ERROR] Invalid preset: {e}")
             sys.exit(1)
 
-        print(f"[INIT] Transcoding Worker")
+        print("[INIT] Transcoding Worker")
         print(f"   Job ID: {self.job_id}")
         print(f"   Preset: {self.preset_name}")
         print(f"   S3 Endpoint: {s3_endpoint}")
@@ -96,7 +96,7 @@ class TranscodingWorker:
         Returns:
             True if successful, False otherwise
         """
-        print(f"[START] Downloading input from MinIO...")
+        print("[START] Downloading input from MinIO...")
 
         try:
             # Ensure parent directory exists
@@ -111,7 +111,7 @@ class TranscodingWorker:
 
             # Verify download
             if not self.input_path.exists():
-                print(f"[ERROR] Download failed - file not found")
+                print("[ERROR] Download failed - file not found")
                 return False
 
             file_size_mb = self.input_path.stat().st_size / (1024 * 1024)
@@ -149,7 +149,7 @@ class TranscodingWorker:
         # Output file
         ffmpeg_args.append(str(self.output_path))
 
-        print(f"[START] Starting FFmpeg transcoding...")
+        print("[START] Starting FFmpeg transcoding...")
         print(f"   Command: {' '.join(ffmpeg_args)}")
 
         start_time = time.time()
@@ -186,7 +186,7 @@ class TranscodingWorker:
         Returns:
             True if successful, False otherwise
         """
-        print(f"[START] Uploading output to MinIO...")
+        print("[START] Uploading output to MinIO...")
 
         try:
             # Verify output file exists
@@ -197,7 +197,7 @@ class TranscodingWorker:
             file_size_mb = self.output_path.stat().st_size / (1024 * 1024)
 
             if file_size_mb == 0:
-                print(f"[ERROR] Output file is empty")
+                print("[ERROR] Output file is empty")
                 return False
 
             # Upload file
@@ -220,7 +220,7 @@ class TranscodingWorker:
 
     def cleanup(self):
         """Delete temporary local files."""
-        print(f"[CLEANUP] Removing temporary files...")
+        print("[CLEANUP] Removing temporary files...")
 
         try:
             if self.input_path.exists():

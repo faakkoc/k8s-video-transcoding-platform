@@ -1,0 +1,8 @@
+project_id             = "k8s-transcoding-plattform"
+region                 = "us-central1"
+cluster_name           = "video-transcoding"
+namespace              = "video-transcoding"
+uploads_bucket_name    = "k8s-transcoding-uploads"
+outputs_bucket_name    = "k8s-transcoding-outputs"
+artifact_registry_name = "transcoding"
+github_repository = "faakkoc/k8s-video-transcoding-platform"
