@@ -9,6 +9,10 @@ resource "google_storage_bucket" "uploads" {
   }
 
   depends_on = [google_project_service.apis]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "google_storage_bucket" "outputs" {
@@ -22,4 +26,8 @@ resource "google_storage_bucket" "outputs" {
   }
 
   depends_on = [google_project_service.apis]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
