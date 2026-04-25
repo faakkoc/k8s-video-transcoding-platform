@@ -5,7 +5,7 @@ resource "google_storage_bucket" "uploads" {
 
   lifecycle_rule {
     condition { age = 7 }
-    action    { type = "Delete" }
+    action { type = "Delete" }
   }
 
   depends_on = [google_project_service.apis]
@@ -18,7 +18,7 @@ resource "google_storage_bucket" "outputs" {
 
   lifecycle_rule {
     condition { age = 7 }
-    action    { type = "Delete" }
+    action { type = "Delete" }
   }
 
   depends_on = [google_project_service.apis]
