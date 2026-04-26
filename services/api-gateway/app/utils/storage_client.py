@@ -142,7 +142,6 @@ class S3Client(StorageClient):
 
     def upload_file(self, file_obj: BinaryIO, bucket: str, key: str) -> bool:
         try:
-            from botocore.exceptions import ClientError
             self.client.upload_fileobj(file_obj, bucket, key)
             logger.info(f"[OK] Uploaded to s3://{bucket}/{key}")
             return True

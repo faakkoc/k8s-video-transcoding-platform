@@ -6,7 +6,7 @@ resource "google_artifact_registry_repository" "transcoding" {
 
   depends_on = [google_project_service.apis]
 
-   lifecycle {
-     prevent_destroy = true
-   }
+  lifecycle {
+    prevent_destroy = true
+  }
 }

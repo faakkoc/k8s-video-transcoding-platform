@@ -3,7 +3,6 @@ Jobs router - job status and download endpoints.
 
 Added: 19.04.2026
 """
-import os
 from fastapi import APIRouter, HTTPException
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel
