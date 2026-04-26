@@ -38,28 +38,7 @@ output "kubectl_config_command" {
   value       = "gcloud container clusters get-credentials ${var.cluster_name} --region ${var.region} --project ${var.project_id}"
 }
 
-output "api_gateway_hmac_access_key" {
-  description = "HMAC Access Key ID for API Gateway (use for S3_ACCESS_KEY)"
-  value       = google_storage_hmac_key.api_gateway.access_id
-}
-
-output "api_gateway_hmac_secret" {
-  description = "HMAC Secret for API Gateway (use for S3_SECRET_KEY)"
-  value       = google_storage_hmac_key.api_gateway.secret
-  sensitive   = true
-}
-
-output "worker_hmac_access_key" {
-  description = "HMAC Access Key ID for Transcoding Worker"
-  value       = google_storage_hmac_key.transcoding_worker.access_id
-}
-
-output "worker_hmac_secret" {
-  description = "HMAC Secret for Transcoding Worker"
-  value       = google_storage_hmac_key.transcoding_worker.secret
-  sensitive   = true
-}
-# Diese Outputs werden als GitHub Actions Secrets/Variables gesetzt
+# GitHub Actions CI/CD
 output "github_actions_service_account" {
   description = "Service Account Email für GitHub Actions"
   value       = google_service_account.github_actions.email
