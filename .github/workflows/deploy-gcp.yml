@@ -22,29 +22,22 @@ env:
   NAMESPACE: video-transcoding
 
 jobs:
-  # ------------------------------------------------------------------
-  # Job 1: Docker Images bauen und in Artifact Registry pushen
-  # ------------------------------------------------------------------
   build-and-push:
     name: Build & Push Images
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-
       - name: Build & Push API Gateway
         run: |
           docker build \
@@ -53,7 +46,6 @@ jobs:
             services/api-gateway/
           docker push ${{ env.REGISTRY }}/api-gateway:latest
           docker push ${{ env.REGISTRY }}/api-gateway:${{ github.sha }}
-
       - name: Build & Push Transcoding Worker
         run: |
           docker build \
@@ -63,9 +55,6 @@ jobs:
           docker push ${{ env.REGISTRY }}/transcoding-worker:latest
           docker push ${{ env.REGISTRY }}/transcoding-worker:${{ github.sha }}
 
-  # ------------------------------------------------------------------
-  # Job 2: Terraform Validate, Format Check & Plan
-  # ------------------------------------------------------------------
   terraform-plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
@@ -73,42 +62,31 @@ jobs:
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.14.8"
-
       - name: Terraform Init
         working-directory: terraform/gcp
         run: terraform init
-
       - name: Terraform Format Check
         working-directory: terraform/gcp
         run: terraform fmt -check -recursive
-
       - name: Terraform Validate
         working-directory: terraform/gcp
         run: terraform validate
-
       - name: Terraform Plan
         working-directory: terraform/gcp
         run: terraform plan
 
-  # ------------------------------------------------------------------
-  # Job 3: Terraform Apply + kubectl rollout restart
-  # Wird nur ausgeführt wenn workflow_dispatch mit apply=true
-  # ------------------------------------------------------------------
   terraform-apply:
     name: Terraform Apply & Deploy
     runs-on: ubuntu-latest
@@ -117,43 +95,36 @@ jobs:
     permissions:
       contents: read
       id-token: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.14.8"
-
-      - name: Terraform Init
-        working-directory: terraform/gcp
-        run: terraform init
-
-      - name: Terraform Apply
-        working-directory: terraform/gcp
-        run: terraform apply -auto-approve
-
       - name: Get GKE Credentials
         uses: google-github-actions/get-gke-credentials@v2
         with:
           cluster_name: ${{ env.CLUSTER_NAME }}
           location: ${{ env.REGION }}
-
+      - name: Create Namespace
+        run: kubectl apply -f kubernetes/gke/00-namespace.yaml
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.8"
+      - name: Terraform Init
+        working-directory: terraform/gcp
+        run: terraform init
+      - name: Terraform Apply
+        working-directory: terraform/gcp
+        run: terraform apply -auto-approve
       - name: Apply Kubernetes Manifests
         run: |
-          kubectl apply -f kubernetes/gke/00-namespace.yaml
           kubectl apply -f kubernetes/gke/01-configmap.yaml
           kubectl apply -f kubernetes/gke/02-service-accounts.yaml
           kubectl apply -f kubernetes/gke/api-gateway/
-
       - name: Rollout Restart API Gateway
         run: |
           kubectl rollout restart deployment/api-gateway -n ${{ env.NAMESPACE }}

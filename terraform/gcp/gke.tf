@@ -20,23 +20,3 @@ module "gke" {
 
   depends_on = [google_project_service.apis]
 }
-
-# -------------------------------------------------------------------
-# Kubernetes Namespace
-#
-# Wird direkt via Terraform erstellt damit der Namespace vor dem
-# HMAC Secret existiert - löst das Henne-Ei-Problem aus der
-# manuellen Deployment-Reihenfolge.
-# -------------------------------------------------------------------
-resource "kubernetes_namespace" "video_transcoding" {
-  metadata {
-    name = var.namespace
-  }
-
-  depends_on = [module.gke]
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
