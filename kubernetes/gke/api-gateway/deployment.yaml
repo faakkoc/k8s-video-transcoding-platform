@@ -3,61 +3,49 @@ kind: Deployment
 metadata:
   name: api-gateway
   namespace: video-transcoding
-  labels:
-    app: api-gateway
-    component: backend
-    tier: api
 spec:
   replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: api-gateway
   template:
     metadata:
       labels:
         app: api-gateway
-        component: backend
-        tier: api
     spec:
       serviceAccountName: api-gateway
       containers:
         - name: api-gateway
-          image: us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/api-gateway:latest
+          image: us-east1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/api-gateway:latest
           imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8000
-              protocol: TCP
           env:
-            - name: APP_NAME
-              value: "Video Transcoding API Gateway"
-            - name: KUBERNETES_NAMESPACE
+            # Storage Provider: gcs uses Workload Identity (no credentials needed)
+            - name: STORAGE_PROVIDER
               valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: IN_CLUSTER
-              value: "true"
-            - name: K8S_NAMESPACE
-              value: "video-transcoding"
+                configMapKeyRef:
+                  name: platform-config
+                  key: storage_provider
+
+            # Image Pull Policy für Worker-Jobs
             - name: IMAGE_PULL_POLICY
               value: "Always"
+
+            # Worker Image aus ConfigMap
             - name: TRANSCODING_WORKER_IMAGE
               valueFrom:
                 configMapKeyRef:
                   name: platform-config
                   key: worker_image
-            # GCS Configuration via HMAC Keys (S3-compatible API)
-            # Same boto3 code works for GCS and StackIT Object Storage
-            - name: S3_ENDPOINT
-              valueFrom:
-                configMapKeyRef:
-                  name: platform-config
-                  key: s3_endpoint
+
+            # GCS Bucket-Konfiguration
             - name: INPUT_BUCKET
               valueFrom:
                 configMapKeyRef:
@@ -68,31 +56,14 @@ spec:
                 configMapKeyRef:
                   name: platform-config
                   key: output_bucket
-            - name: S3_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: gcs-hmac-credentials
-                  key: api-gateway-access-key
-            - name: S3_REGION
+
+            # Kubernetes Namespace
+            - name: K8S_NAMESPACE
               valueFrom:
                 configMapKeyRef:
                   name: platform-config
-                  key: s3_region
-            - name: S3_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: gcs-hmac-credentials
-                  key: api-gateway-secret
-            - name: WORKER_S3_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: gcs-hmac-credentials
-                  key: worker-access-key
-            - name: WORKER_S3_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: gcs-hmac-credentials
-                  key: worker-secret
+                  key: k8s_namespace
+
           resources:
             requests:
               memory: "256Mi"
@@ -100,12 +71,15 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+
           livenessProbe:
             httpGet:
               path: /api/v1/health
               port: http
             initialDelaySeconds: 10
             periodSeconds: 30
+            failureThreshold: 3
+
           readinessProbe:
             httpGet:
               path: /api/v1/ready

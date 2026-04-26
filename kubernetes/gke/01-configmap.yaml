@@ -8,12 +8,11 @@ data:
   input_bucket: "k8s-transcoding-uploads"
   output_bucket: "k8s-transcoding-outputs"
 
-  # GCS endpoint (boto3 compatible)
-  s3_endpoint: "https://storage.googleapis.com"
-
-  # GCS requires "auto" instead of an AWS region name
-  s3_region: "auto"
+  # Storage provider: "gcs" uses Workload Identity (no credentials needed)
+  storage_provider: "gcs"
 
   # Kubernetes
   k8s_namespace: "video-transcoding"
-  worker_image: "us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/transcoding-worker:latest"
+
+  # Worker Image from Artifact Registry
+  worker_image: "us-east1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/transcoding-worker:latest"

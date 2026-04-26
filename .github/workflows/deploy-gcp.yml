@@ -16,8 +16,8 @@ on:
 
 env:
   PROJECT_ID: k8s-transcoding-plattform
-  REGION: us-central1
-  REGISTRY: us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding
+  REGION: us-east1
+  REGISTRY: us-east1-docker.pkg.dev/k8s-transcoding-plattform/transcoding
   CLUSTER_NAME: video-transcoding
   NAMESPACE: video-transcoding
 

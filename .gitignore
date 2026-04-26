@@ -48,7 +48,11 @@ kubeconfig
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+
+# Sensitive tfvars (terraform.auto.tfvars ist im Repo - keine Secrets)
+*secret*.tfvars
 terraform.tfvars
+
 
 # Environment Variables
 .env

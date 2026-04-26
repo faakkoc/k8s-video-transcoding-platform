@@ -3,18 +3,18 @@ Jobs router - job status and download endpoints.
 
 Added: 19.04.2026
 """
-
+import os
 from fastapi import APIRouter, HTTPException
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+from app.routers.upload import OUTPUT_BUCKET
 from app.utils.k8s_client import get_job_status
-from app.utils.s3_client import get_s3_client
+from app.utils.storage_client import get_storage_client
 
 router = APIRouter()
-
 
 class JobStatusResponse(BaseModel):
     """Response model for job status endpoint."""
@@ -152,13 +152,13 @@ async def download_job(job_id: str):
         )
 
     # 4. Generate presigned URL from MinIO
-    s3_client = get_s3_client()
+    s3_client = get_storage_client()
     expiration = 3600  # 1 hour
 
     download_url = s3_client.get_file_url(
-        bucket="outputs",
-        key=output_key,
-        expiration=expiration
+        OUTPUT_BUCKET,
+        output_key,
+        expiration
     )
 
     if not download_url:

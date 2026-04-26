@@ -11,52 +11,76 @@ This project is part of a **Scientific Project** at Hochschule RheinMain, demons
 1. **Learn Kubernetes** hands-on through real-world application
 2. **Implement Microservices Architecture** for media processing
 3. **Cloud-agnostic Design** deployable on GCP and StackIT
-4. **Production-ready CI/CD** with multi-cloud support
+4. **Production-ready CI/CD** with GitHub Actions and Workload Identity Federation
 
 ### Use Case: Video Transcoding
 
-- Upload videos via web interface
+- Upload videos via REST API (Swagger UI)
 - Transcode to multiple formats (480p, 720p, 1080p, 4k)
 - Horizontal scaling based on workload
-- Job status monitoring
-- Download processed videos
+- Job queue management via Kubernetes Jobs
+- Download processed videos via presigned URLs
 
 ---
 
 ## Architecture
 
+```
+Internet
+    │
+    ▼
+┌─────────────────────────────────────────────────────┐
+│              Kubernetes Cluster                     │
+│                                                     │
+│  ┌──────────────────┐                               │
+│  │   API Gateway    │ ← LoadBalancer / Port-Forward │
+│  │  (FastAPI, 2x)   │                               │
+│  └────────┬─────────┘                               │
+│           │ creates K8s Job                         │
+│           ▼                                         │
+│  ┌──────────────────┐                               │
+│  │ Transcoding Job  │ (on demand, auto-scaled)      │
+│  │  (FFmpeg Worker) │                               │
+│  └────────┬─────────┘                               │
+└───────────┼─────────────────────────────────────────┘
+            │ boto3 S3-compatible API
+            ▼
+┌──────────────────────────────────┐
+│         Object Storage           │
+│  uploads bucket │ outputs bucket │
+│  (MinIO / GCS)  │  (MinIO / GCS) │
+└──────────────────────────────────┘
+```
+
 ### Microservices
 
-```
-┌──────────────┐     ┌─────────────┐
-│   Frontend   │────▶│ API Gateway │
-│  (optional)  │     │  (FastAPI)  │
-└──────────────┘     └──────┬──────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-              ▼              ▼              ▼
-       Create K8s Job   MinIO S3      Job Status
-              │         Object        & Download
-              ▼         Storage
-   ┌─────────────────────┐   ▲
-   │ Transcoding Worker  │───┘
-   │  (FFmpeg + Python)  │
-   └─────────────────────┘
-```
+| Service | Technology | Purpose |
+|---------|------------|---------|
+| **API Gateway** | FastAPI (Python) | REST API, upload, job management |
+| **Transcoding Worker** | FFmpeg + Python | Video transcoding |
 
 ### Technology Stack
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Container Runtime** | Docker | Application containerization |
-| **Orchestration** | Kubernetes | Container management & scaling |
-| **Local Dev** | Kind | Local Kubernetes cluster |
-| **API Gateway** | FastAPI (Python) | REST API, job management |
-| **Transcoding** | FFmpeg | Video processing |
-| **Object Storage** | MinIO (local) / GCS / StackIT | Video file storage |
-| **IaC** | Terraform | Infrastructure provisioning |
-| **CI/CD** | GitHub Actions | Automated deployment |
+| Component | Local (Kind) | GKE (GCP) |
+|-----------|-------------|-----------|
+| **Orchestration** | Kind | GKE Autopilot |
+| **Object Storage** | MinIO | Google Cloud Storage |
+| **Container Registry** | `kind load` | Google Artifact Registry |
+| **Credentials** | Hardcoded (MinIO) | HMAC Keys (K8s Secret) |
+| **Infrastructure** | Manual | Terraform |
+| **CI/CD** | — | GitHub Actions + WIF |
+
+---
+
+## Performance (GKE Autopilot)
+
+| Szenario | Dauer | Ursache |
+|----------|-------|---------|
+| **Cold Start** (erster Job nach Leerlauf) | 60–90s | Autopilot fährt neuen Node hoch |
+| **Warm Start** (Node bereits laufend) | ~10–15s | Nur FFmpeg Transcoding |
+| **FFmpeg Transcoding** (720p, 1MB Video) | ~9s | Reine Rechenzeit |
+
+**Trade-off:** GKE Autopilot skaliert Nodes automatisch herunter wenn keine Last vorhanden ist — das spart Kosten, führt aber beim ersten Job nach einer Ruhephase zu 60–90 Sekunden Latenz. Für ein PoC-Projekt ist dieser Trade-off akzeptabel. Ein produktiver Einsatz würde Standard GKE mit vorprovisioniertem Node Pool nutzen.
 
 ---
 
@@ -78,21 +102,20 @@ k8s-video-transcoding-platform/
 │   ├── local/                     # Kind cluster
 │   └── gke/                       # GKE production
 ├── terraform/                     # Infrastructure as Code
-│   ├── gcp/                       # Google Cloud
-│   └── stackit/                   # StackIT
+│   └── gcp/                       # Google Cloud
 ├── scripts/                       # Helper scripts
 └── .github/workflows/             # CI/CD pipelines
 ```
 
-## Quick Start
+---
+
+## Quick Start (Local)
 
 ### Prerequisites
 
 - Docker
 - Kind
 - kubectl
-- Helm
-- Fish shell (recommended, scripts use Fish syntax)
 
 ### Local Development
 
@@ -104,35 +127,46 @@ cd k8s-video-transcoding-platform
 # Create local Kubernetes cluster
 ./scripts/setup-kind.sh
 
-# Build and load images
-docker build -t api-gateway:latest services/api-gateway/
-docker build -t transcoding-worker:latest services/transcoding-worker/
-kind load docker-image api-gateway:latest --name video-transcoding
-kind load docker-image transcoding-worker:latest --name video-transcoding
+# Deploy services
+./scripts/deploy-local.sh
 
-# Deploy MinIO
-helm repo add minio https://charts.min.io/
-helm install minio minio/minio --namespace video-transcoding \
-  --set rootUser=minioadmin --set rootPassword=minioadmin123 \
-  --set mode=standalone --set persistence.size=10Gi
-
-# Deploy API Gateway
-kubectl apply -f kubernetes/local/api-gateway/
-
-# Access application
-kubectl port-forward -n video-transcoding svc/api-gateway 8080:80
-# API Docs: http://localhost:8080/api/v1/docs
+# Access Swagger UI
+# http://localhost:8080/api/v1/docs
 ```
 
-## API Endpoints
+---
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/health` | Liveness probe |
-| GET | `/api/v1/ready` | Readiness probe |
-| POST | `/api/v1/upload` | Upload video, create transcoding job |
-| GET | `/api/v1/jobs/{job_id}` | Get job status |
-| GET | `/api/v1/download/{job_id}` | Get presigned download URL |
+## Quick Start (GKE)
+
+See [GKE Deployment Guide](docs/05-deployment/gke-e2e-test.md) for full instructions.
+
+```bash
+# 1. Provision infrastructure
+cd terraform/gcp && terraform apply
+
+# 2. Push Docker images (handled by CI/CD pipeline on push to main)
+
+# 3. Deploy to GKE
+kubectl apply -f kubernetes/gke/
+
+# 4. Access Swagger UI
+# http://<EXTERNAL-IP>/api/v1/docs
+```
+
+---
+
+## CI/CD
+
+The GitHub Actions pipeline runs automatically on every push to `main`:
+
+- **Build & Test** — Lint (ruff) + Docker build
+- **Deploy to GCP** — Docker push to Artifact Registry + Terraform plan
+
+`terraform apply` is triggered **manually** via `Actions → Deploy to GCP → Run workflow → apply=true` to allow plan review before infrastructure changes.
+
+Authentication uses **Workload Identity Federation** — no service account keys stored as secrets.
+
+---
 
 ## Documentation
 
@@ -145,22 +179,8 @@ Detailed documentation is available in the `docs/` directory:
 - [Deployment](docs/05-deployment/)
 - [Lessons Learned](docs/06-lessons-learned/)
 
-## Development Status
-
-### Roadmap
-
-- [x] Setup development environment
-- [x] Implement API Gateway (upload, job creation, status, download)
-- [x] Implement Transcoding Worker (FFmpeg + MinIO S3)
-- [x] Local Kubernetes deployment (Kind + MinIO)
-- [x] Job Status & Download Endpoints
-- [ ] Frontend (optional — Swagger UI used for development)
-- [ ] GCP deployment (GKE + Cloud Storage + Cloud SQL)
-- [ ] StackIT deployment
-- [ ] CI/CD pipelines (GitHub Actions)
-
 ---
 
 ## License
 
-Apache License 2.0 - see [LICENSE](LICENSE) for details
+Apache License 2.0 — see [LICENSE](LICENSE) for details.

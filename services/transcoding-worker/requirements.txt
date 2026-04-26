@@ -1,6 +1,3 @@
-# Transcoding Worker Dependencies
-
-# S3 Client (for MinIO)
-boto3==1.35.36
-
-# No other dependencies needed - worker uses Python stdlib for everything else
+# Storage Backends
+boto3==1.35.36                  # S3-compatible (MinIO, StackIT)
+google-cloud-storage==2.18.0    # GCS via Workload Identity

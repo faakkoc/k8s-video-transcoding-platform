@@ -8,7 +8,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from app.models.job import JobResponse
 from app.utils.validators import validate_video_file
 from app.utils.k8s_client import create_transcoding_job
-from app.utils.s3_client import get_s3_client
+from app.utils.storage_client import get_storage_client
 import logging
 import time
 from datetime import datetime
@@ -70,7 +70,7 @@ async def upload_video(
 
     # 4. Upload to MinIO
     try:
-        s3_client = get_s3_client()
+        s3_client = get_storage_client()
 
         # Read file content into memory
         file_content = await file.read()
@@ -78,9 +78,9 @@ async def upload_video(
 
         # Upload to uploads bucket
         success = s3_client.upload_file(
-            file_obj=file_obj,
-            bucket=INPUT_BUCKET,
-            key=input_key
+            file_obj,
+            INPUT_BUCKET,
+            input_key
         )
 
         if not success:
@@ -122,7 +122,7 @@ async def upload_video(
 
         # Cleanup: Delete uploaded file if job creation fails
         try:
-            s3_client.delete_file(bucket=INPUT_BUCKET, key=input_key)
+            s3_client.delete_file(INPUT_BUCKET, input_key)
             logger.info(f"[CLEANUP] Deleted s3://uploads/{input_key}")
         except Exception:
             pass

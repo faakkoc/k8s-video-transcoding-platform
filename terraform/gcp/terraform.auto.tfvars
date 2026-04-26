@@ -1,5 +1,5 @@
 project_id             = "k8s-transcoding-plattform"
-region                 = "us-central1"
+region                 = "us-east1"
 cluster_name           = "video-transcoding"
 namespace              = "video-transcoding"
 uploads_bucket_name    = "k8s-transcoding-uploads"

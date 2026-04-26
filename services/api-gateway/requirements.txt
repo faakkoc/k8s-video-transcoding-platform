@@ -1,28 +1,28 @@
 # FastAPI Core Dependencies
-fastapi==0.109.0           # Modern web framework for building APIs
-uvicorn[standard]==0.27.0  # ASGI server for running FastAPI
-
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+ 
 # Kubernetes Client
-kubernetes==29.0.0         # Official K8s Python client for creating Jobs
-
+kubernetes==29.0.0
+ 
 # Data Validation & Serialization
-pydantic==2.5.3           # Data validation with type hints
-pydantic-settings==2.1.0   # Settings management from env vars
-
+pydantic==2.5.3
+pydantic-settings==2.1.0
+ 
 # File Handling
-python-multipart==0.0.6    # Required for file uploads
-aiofiles==23.2.1           # Async file operations
-
-# HTTP Client (for future integrations)
-httpx==0.26.0             # Modern async HTTP client
-
+python-multipart==0.0.6
+aiofiles==23.2.1
+ 
+# HTTP Client (for future integrations + testing)
+httpx==0.26.0
+ 
 # Logging & Monitoring
-python-json-logger==2.0.7  # JSON-formatted logging
-
-# Testing (development)
+python-json-logger==2.0.7
+ 
+# Storage Backends
+boto3==1.35.36                  # S3-compatible (MinIO, StackIT)
+google-cloud-storage==2.18.0    # GCS via Workload Identity
+ 
+# Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
-httpx==0.26.0             # For testing API endpoints
-
-# S3-Client Integration
-boto3==1.35.36
