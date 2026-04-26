@@ -6,6 +6,7 @@ resource "google_project_service" "apis" {
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "serviceusage.googleapis.com",
   ])
 
   project            = var.project_id
