@@ -118,3 +118,13 @@ resource "google_project_iam_member" "github_actions_serviceusage" {
     prevent_destroy = true
   }
 }
+
+resource "google_project_iam_member" "github_actions_iam_sa_admin" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountAdmin"
+  member  = "serviceAccount:${google_service_account.github_actions.email}"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
