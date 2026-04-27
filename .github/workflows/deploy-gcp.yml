@@ -103,13 +103,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-      - name: Get GKE Credentials
-        uses: google-github-actions/get-gke-credentials@v2
-        with:
-          cluster_name: ${{ env.CLUSTER_NAME }}
-          location: ${{ env.REGION }}
-      - name: Create Namespace
-        run: kubectl apply -f kubernetes/gke/00-namespace.yaml
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -120,6 +114,14 @@ jobs:
       - name: Terraform Apply
         working-directory: terraform/gcp
         run: terraform apply -auto-approve
+
+      - name: Get GKE Credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          location: ${{ env.REGION }}
+      - name: Create Namespace
+        run: kubectl apply -f kubernetes/gke/00-namespace.yaml
       - name: Apply Kubernetes Manifests
         run: |
           kubectl apply -f kubernetes/gke/01-configmap.yaml
