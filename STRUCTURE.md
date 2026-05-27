@@ -1,20 +1,19 @@
 # Projektstruktur
 
-> **Hinweis:** Diese Datei beschreibt die **geplante Zielstruktur** des Projekts.
-> Nicht alle Ordner und Dateien existieren bereits — sie werden im Laufe der
-> Entwicklung (GCP- und StackIT-Deployment, CI/CD) angelegt.
-
-Diese Datei dokumentiert die Ordnerstruktur des Projekts.
+> **Hinweis:** Diese Datei dokumentiert den **aktuellen Ist-Zustand** des Projekts.
+> Ursprünglich geplante aber nicht implementierte Komponenten (Frontend, Job-Controller)
+> werden in der schriftlichen Ausarbeitung als "Future Work" behandelt.
 
 ```
 k8s-video-transcoding-platform/
 │
-├── .gitignore                     # Git ignore rules
+├── .gitignore
 ├── LICENSE                        # Apache 2.0 License
 ├── README.md                      # Project overview
+├── STRUCTURE.md                   # Diese Datei
 │
 ├── docs/                          # Scientific documentation
-│   ├── README.md                  # Documentation overview
+│   ├── README.md
 │   │
 │   ├── 01-kubernetes-fundamentals/
 │   │   ├── container-orchestration.md
@@ -29,48 +28,55 @@ k8s-video-transcoding-platform/
 │   ├── 03-design-decisions/
 │   │   ├── architecture-overview.md
 │   │   ├── technology-stack.md
-│   │   └── cloud-agnostic-design.md
+│   │   ├── cloud-agnostic-design.md
+│   │   ├── storage-strategy.md
+│   │   ├── metadata-persistence.md
+│   │   ├── transcoding-technology.md
+│   │   └── kubernetes-patterns.md
 │   │
 │   ├── 04-implementation/
 │   │   ├── development-setup.md
-│   │   ├── api-gateway.md
-│   │   ├── transcoding-worker.md
-│   │   └── kubernetes-manifests.md
+│   │   ├── api-gateway-implementation.md
+│   │   ├── transcoding-worker-implementation.md
+│   │   ├── kubernetes-job-creation.md
+│   │   ├── upload-feature.md
+│   │   ├── job-status-download-endpoints.md
+│   │   ├── deployment-success.md
+│   │   └── end-to-end-test.md
 │   │
 │   ├── 05-deployment/
 │   │   ├── local-kind.md
 │   │   ├── gke-deployment.md
-│   │   ├── stackit-deployment.md
-│   │   └── cicd-pipelines.md
+│   │   ├── gke-terraform.md
+│   │   ├── gke-kubernetes-manifests.md
+│   │   ├── gke-e2e-test.md
+│   │   ├── cicd-pipelines.md
+│   │   └── stackit-deployment.md  # Future Work
 │   │
 │   └── 06-lessons-learned/
-│       ├── kubernetes-benefits.md
 │       ├── challenges.md
-│       └── production-readiness.md
+│       ├── what-worked-well.md
+│       ├── gke-challenges.md
+│       └── cicd-challenges.md
 │
 ├── services/                      # Microservices Source Code
-│   │
-│   ├── frontend/                  # React Frontend
-│   │   ├── src/
-│   │   ├── public/
-│   │   ├── Dockerfile
-│   │   ├── package.json
-│   │   └── README.md
 │   │
 │   ├── api-gateway/               # FastAPI Gateway
 │   │   ├── app/
 │   │   │   ├── main.py
+│   │   │   ├── config.py
 │   │   │   ├── routers/
+│   │   │   │   ├── health.py
+│   │   │   │   ├── upload.py
+│   │   │   │   └── jobs.py
 │   │   │   ├── models/
+│   │   │   │   └── job.py
 │   │   │   └── utils/
+│   │   │       ├── k8s_client.py
+│   │   │       ├── storage_client.py  # GCSClient + S3Client Abstraktion
+│   │   │       ├── s3_client.py       # Legacy (lokale Entwicklung)
+│   │   │       └── validators.py
 │   │   ├── tests/
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── README.md
-│   │
-│   ├── job-controller/            # Kubernetes Job Controller
-│   │   ├── controller.py
-│   │   ├── k8s_client.py
 │   │   ├── Dockerfile
 │   │   ├── requirements.txt
 │   │   └── README.md
@@ -86,58 +92,45 @@ k8s-video-transcoding-platform/
 │   │
 │   ├── local/                     # Kind (local development)
 │   │   ├── 00-namespace.yaml
-│   │   ├── 01-configmap.yaml
-│   │   ├── 02-secrets.yaml
-│   │   ├── frontend/
-│   │   │   ├── deployment.yaml
-│   │   │   ├── service.yaml
-│   │   │   └── ingress.yaml
-│   │   ├── api-gateway/
-│   │   │   ├── deployment.yaml
-│   │   │   ├── service.yaml
-│   │   │   └── hpa.yaml
-│   │   ├── job-controller/
-│   │   │   ├── deployment.yaml
-│   │   │   └── service.yaml
-│   │   └── transcoding-worker/
-│   │       └── job-template.yaml
+│   │   └── api-gateway/
+│   │       ├── deployment.yaml    # MinIO/S3 Konfiguration
+│   │       ├── service.yaml
+│   │       ├── service-account.yaml
+│   │       └── hpa.yaml
 │   │
 │   └── gke/                       # GKE Production
 │       ├── 00-namespace.yaml
-│       ├── 01-configmap.yaml
-│       ├── 02-secrets.yaml
-│       └── ... (similar to local/)
+│       ├── 01-configmap.yaml      # STORAGE_PROVIDER=gcs
+│       ├── 02-service-accounts.yaml
+│       └── api-gateway/
+│           ├── deployment.yaml    # Workload Identity, kein Secret
+│           ├── service.yaml       # LoadBalancer
+│           └── hpa.yaml
 │
 ├── terraform/                     # Infrastructure as Code
 │   │
 │   ├── gcp/                       # Google Cloud Platform
-│   │   ├── main.tf
+│   │   ├── versions.tf
+│   │   ├── providers.tf
 │   │   ├── variables.tf
-│   │   ├── outputs.tf
+│   │   ├── terraform.auto.tfvars
+│   │   ├── apis.tf
 │   │   ├── gke.tf
 │   │   ├── storage.tf
-│   │   ├── pubsub.tf
-│   │   └── sql.tf
+│   │   ├── artifact-registry.tf
+│   │   ├── iam.tf                 # Service Accounts + Workload Identity
+│   │   ├── github-wif.tf          # Workload Identity Federation für CI/CD
+│   │   └── outputs.tf
 │   │
-│   └── stackit/                   # StackIT
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       └── kubernetes.tf
+│   └── stackit/                   # Future Work
 │
-├── scripts/                       # Helper Scripts
-│   ├── setup-kind.sh              # Create local Kind cluster
-│   ├── deploy-local.sh            # Local deployment
-│   ├── deploy-gke.sh              # GKE deployment
-│   ├── deploy-stackit.sh          # StackIT deployment
-│   ├── build-images.sh            # Build Docker images
-│   └── cleanup.sh                 # Cleanup script
+├── scripts/
+│   └── setup-kind.sh
 │
 └── .github/                       # CI/CD
     └── workflows/
-        ├── build-and-test.yml     # Build & Test Pipeline
-        ├── deploy-gcp.yml         # GCP Deployment Pipeline
-        └── deploy-stackit.yml     # StackIT Deployment Pipeline
+        ├── build-and-test.yml     # Lint + Docker Build (jeder Push)
+        └── deploy-gcp.yml         # Build & Push + Terraform Plan/Apply
 ```
 
 ---
@@ -145,24 +138,24 @@ k8s-video-transcoding-platform/
 ## Folder Descriptions
 
 ### /docs
-Contains complete scientific documentation written parallel to development.
+Wissenschaftliche Dokumentation, parallel zur Entwicklung geschrieben.
 
 ### /services
-Source code of all microservices. Each service is standalone with its own Dockerfile and tests.
+Zwei implementierte Microservices: API Gateway (FastAPI) und Transcoding Worker (FFmpeg + Python).
+Ursprünglich geplante Services (Frontend, Job-Controller) wurden bewusst nicht implementiert —
+die Job-Orchestrierung ist direkt im API Gateway integriert, ein Frontend ist durch die Swagger UI ersetzt.
 
 ### /kubernetes
-All Kubernetes YAML manifests. Separated by environment (local/gke/stackit).
+Kubernetes YAML Manifests getrennt nach Umgebung. GKE nutzt Workload Identity (kein Secret für Storage),
+lokal wird MinIO via S3-kompatibler API genutzt.
 
 ### /terraform
-Infrastructure as Code for automatic provisioning of cloud resources.
-
-### /scripts
-Shell scripts for recurring tasks (setup, deployment, cleanup).
+Infrastructure as Code für GCP. StackIT-Deployment ist als Future Work geplant.
 
 ### /.github/workflows
-GitHub Actions CI/CD pipelines for automated testing and deployment.
+Zwei GitHub Actions Pipelines: Build & Test (automatisch) und Deploy to GCP (Apply manuell via workflow_dispatch).
 
 ---
 
-**Date:** 04.02.2025  
-**Updated:** On structural changes
+**Datum:** 27.05.2026
+**Status:** Aktueller Ist-Zustand

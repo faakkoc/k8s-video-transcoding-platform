@@ -1,6 +1,7 @@
 # GKE Deployment: Übersicht
 
 **Datum:** 21.04.2026
+**Aktualisiert:** 27.05.2026 — Storage-Abstraktion auf Workload Identity umgestellt
 **Status:** ✅ Erfolgreich — End-to-End Test bestanden
 
 ---
@@ -11,7 +12,7 @@ Dieses Kapitel dokumentiert das Deployment der Video Transcoding Platform auf Go
 
 Das GKE Deployment demonstriert zwei zentrale Aspekte des Projekts:
 
-- **Cloud-Agnostik:** Derselbe Anwendungscode läuft ohne Änderungen in der Cloud — lediglich Konfiguration (ENV-Variablen, ConfigMaps, Secrets) wird angepasst.
+- **Cloud-Agnostik:** Derselbe Anwendungscode läuft ohne Änderungen in der Cloud — lediglich Konfiguration (ENV-Variablen, ConfigMaps) wird angepasst.
 - **Infrastructure as Code:** Die gesamte GCP-Infrastruktur wird über Terraform provisioniert und ist reproduzierbar.
 
 ---
@@ -24,7 +25,7 @@ Internet
     ▼
 ┌─────────────────────────────────────────────────────┐
 │              GKE Autopilot Cluster                  │
-│              (us-central1, GCP)                     │
+│              (us-east1, GCP)                        │
 │                                                     │
 │  ┌─────────────────────────────────────────────┐   │
 │  │         Namespace: video-transcoding         │   │
@@ -42,7 +43,7 @@ Internet
 │  │           │                                 │   │
 │  └───────────┼─────────────────────────────────┘   │
 └──────────────┼──────────────────────────────────────┘
-               │ boto3 S3-API (HMAC Keys)
+               │ google-cloud-storage (Workload Identity)
                ▼
 ┌──────────────────────────────────┐
 │     Google Cloud Storage         │
@@ -61,27 +62,55 @@ Internet
 |------------|--------------|-----|
 | **Kubernetes** | Kind v0.31.0 | GKE Autopilot |
 | **Container Registry** | `kind load` | Google Artifact Registry |
-| **Object Storage** | MinIO | Google Cloud Storage (GCS) |
-| **Credentials** | Hardcoded (minioadmin) | HMAC Keys (Kubernetes Secret) |
+| **Object Storage** | MinIO (S3-kompatibel) | Google Cloud Storage |
+| **Storage Auth** | Hardcoded (minioadmin) | Workload Identity (kein Secret) |
+| **Storage Client** | boto3 (S3Client) | google-cloud-storage (GCSClient) |
 | **Ingress** | Port-Forward | LoadBalancer Service (Public IP) |
 | **Infrastruktur** | Manuell | Terraform |
+| **CI/CD** | — | GitHub Actions + WIF |
 
 ---
 
-## Wichtige Design-Entscheidung: HMAC Keys statt Workload Identity
+## Wichtige Design-Entscheidung: Storage-Abstraktion mit Workload Identity
 
-Für den GCS-Zugriff wurden HMAC Keys anstelle von Workload Identity verwendet.
+### Warum nicht boto3 für GCS?
 
-**Begründung:** boto3 nutzt das AWS SigV4-Protokoll für die S3-kompatible API. GCS unterstützt zwar die S3-kompatible API, aber Workload Identity (GCP-natives Auth-Verfahren) ist mit boto3 nicht kompatibel — boto3 erwartet Access Key + Secret Key.
+Der initiale Ansatz nutzte HMAC Keys um boto3 mit der S3-kompatiblen GCS-API zu verwenden. Das hatte Nachteile:
 
-HMAC Keys ermöglichen es, dieselbe boto3-Abstraktion für GCS und StackIT Object Storage zu verwenden. Der Code bleibt cloud-agnostisch.
+- HMAC Keys müssen manuell rotiert werden
+- Kubernetes Secret im Cluster erforderlich
+- Credentials-Management zusätzliche Komplexität
+
+### Lösung: StorageClient-Abstraktion
+
+Eine abstrakte `StorageClient`-Klasse mit zwei Implementierungen:
+
+```python
+# Gesteuert über STORAGE_PROVIDER ENV-Variable
+def get_storage_client() -> StorageClient:
+    provider = os.getenv("STORAGE_PROVIDER", "s3")
+    if provider == "gcs":
+        return GCSClient()   # google-cloud-storage + Workload Identity
+    return S3Client()        # boto3 für MinIO/StackIT
+```
+
+**`GCSClient`** — für GKE:
+- Nutzt `google-cloud-storage` Library
+- Authentifizierung automatisch via GKE Workload Identity
+- **Kein Secret im Cluster notwendig**
+- Pod-ServiceAccount → GCP ServiceAccount → GCS Bucket
+
+**`S3Client`** — für lokal und StackIT:
+- Nutzt `boto3` mit S3-kompatibler API
+- Credentials via ENV-Variablen (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`)
 
 ```
-Workload Identity → funktioniert nur mit google-cloud-storage (nicht boto3)
-HMAC Keys        → funktioniert mit boto3 → identischer Code für GCS + StackIT ✅
+GKE:    STORAGE_PROVIDER=gcs → GCSClient → Workload Identity → GCS ✅
+Lokal:  STORAGE_PROVIDER=s3  → S3Client  → MinIO              ✅
+StackIT: STORAGE_PROVIDER=s3 → S3Client  → StackIT S3         ✅
 ```
 
-Die HMAC Keys werden von Terraform erstellt und als Kubernetes Secret im Cluster abgelegt.
+Der Anwendungscode bleibt identisch — nur die ConfigMap ändert sich pro Umgebung.
 
 ---
 
@@ -90,8 +119,8 @@ Die HMAC Keys werden von Terraform erstellt und als Kubernetes Secret im Cluster
 Das GKE Deployment besteht aus vier Phasen:
 
 1. **Terraform** — GCP Infrastruktur provisionieren
-2. **Docker** — Images bauen und in Artifact Registry pushen
-3. **Kubernetes** — Manifests anwenden
+2. **CI/CD** — Images bauen und in Artifact Registry pushen (automatisch via GitHub Actions)
+3. **Kubernetes** — Manifests anwenden (via Pipeline)
 4. **Test** — End-to-End Test
 
 Details zu jedem Schritt in den folgenden Dokumenten:
@@ -99,6 +128,7 @@ Details zu jedem Schritt in den folgenden Dokumenten:
 - [Terraform Infrastruktur](./gke-terraform.md)
 - [Kubernetes Manifests](./gke-kubernetes-manifests.md)
 - [Step-by-Step Deployment & E2E Test](./gke-e2e-test.md)
+- [CI/CD Pipelines](./cicd-pipelines.md)
 
 ---
 
@@ -106,15 +136,15 @@ Details zu jedem Schritt in den folgenden Dokumenten:
 
 | Komponente | Status |
 |------------|--------|
-| GKE Autopilot Cluster | ✅ Running |
+| GKE Autopilot Cluster (us-east1) | ✅ Running |
 | API Gateway (2 Replicas) | ✅ Running |
 | LoadBalancer Public IP | ✅ `<EXTERNAL-IP>` |
 | GCS Buckets (uploads/outputs) | ✅ Erstellt |
-| Artifact Registry | ✅ Images gepusht |
-| HMAC Credentials | ✅ Kubernetes Secret |
+| Artifact Registry | ✅ Images gepusht via CI/CD |
+| Workload Identity | ✅ Kein Secret erforderlich |
 | Upload Endpoint | ✅ HTTP 201 |
 | Transcoding Job | ✅ Completed |
-| GCS Output | ✅ `393.9 KB` |
+| GCS Output | ✅ 393.9 KB |
 
 ---
 
