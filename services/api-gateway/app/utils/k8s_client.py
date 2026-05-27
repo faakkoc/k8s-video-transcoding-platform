@@ -1,6 +1,7 @@
 """
 Kubernetes client for creating and querying transcoding jobs.
 Updated: 26.04.2026 - Removed S3 credentials for GCS (Workload Identity)
+Updated: 27.05.2026 - Restored get_job_status and _parse_job_status
 """
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
@@ -105,3 +106,64 @@ def create_transcoding_job(
     except ApiException as e:
         logger.error(f"[ERROR] Failed to create job: {e}")
         raise
+
+
+def get_job_status(job_id: str) -> dict:
+    """
+    Get status and metadata of a transcoding job from Kubernetes.
+
+    Reads job status from K8s Job object and metadata from container
+    ENV vars (INPUT_KEY, OUTPUT_KEY, PRESET are stored there at creation time).
+
+    Args:
+        job_id: Kubernetes Job name (e.g., "transcode-20260421-191719-720p")
+
+    Returns:
+        dict with status, output_key, preset, input_key
+
+    Raises:
+        ApiException: If job not found (404) or other K8s error
+    """
+    batch_v1 = get_k8s_client()
+    namespace = os.getenv("K8S_NAMESPACE", "video-transcoding")
+
+    job = batch_v1.read_namespaced_job(name=job_id, namespace=namespace)
+
+    job_status = _parse_job_status(job.status)
+
+    env_vars = job.spec.template.spec.containers[0].env
+    env_map = {e.name: e.value for e in env_vars}
+
+    return {
+        "job_id": job_id,
+        "status": job_status,
+        "input_key": env_map.get("INPUT_KEY"),
+        "output_key": env_map.get("OUTPUT_KEY"),
+        "preset": env_map.get("PRESET"),
+        "start_time": job.status.start_time,
+        "completion_time": job.status.completion_time,
+    }
+
+
+def _parse_job_status(job_status) -> str:
+    """
+    Convert Kubernetes Job status fields to a simple status string.
+
+    Args:
+        job_status: kubernetes.client.V1JobStatus object
+
+    Returns:
+        One of: "pending", "running", "completed", "failed"
+    """
+    active = job_status.active or 0
+    succeeded = job_status.succeeded or 0
+    failed = job_status.failed or 0
+
+    if succeeded > 0:
+        return "completed"
+    elif active > 0:
+        return "running"
+    elif failed > 0 and active == 0:
+        return "failed"
+    else:
+        return "pending"
