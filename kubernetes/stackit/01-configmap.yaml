@@ -21,4 +21,4 @@ data:
 
   # Worker Image aus StackIT Container Registry (wird nach erstem Push gesetzt)
   # Vorerst: gleiche Registry wie GCP oder lokales Image
-  worker_image: "registry.eu01.onstackit.cloud/video-transcoding/transcoding-worker:latest"
+  worker_image: "registry.onstackit.cloud/video-transcoding/transcoding-worker:latest"
