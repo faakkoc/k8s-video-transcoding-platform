@@ -2,6 +2,7 @@
 Kubernetes client for creating and querying transcoding jobs.
 Updated: 26.04.2026 - Removed S3 credentials for GCS (Workload Identity)
 Updated: 27.05.2026 - Restored get_job_status and _parse_job_status
+Updated: 08.06.2026 - Optional IMAGE_PULL_SECRET for private registries (StackIT)
 """
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
@@ -64,6 +65,15 @@ def create_transcoding_job(
             client.V1EnvVar(name="S3_REGION",      value=os.getenv("S3_REGION", "us-east-1")),
         ])
 
+    # IMAGE_PULL_SECRET: optional, only needed for private registries (e.g. StackIT Harbor)
+    # On GKE: not set → None → Workload Identity handles registry access
+    # On StackIT: set to "harbor-pull-secret" in deployment.yaml
+    image_pull_secret = os.getenv("IMAGE_PULL_SECRET")
+    image_pull_secrets = (
+        [client.V1LocalObjectReference(name=image_pull_secret)]
+        if image_pull_secret else None
+    )
+
     batch_v1 = get_k8s_client()
 
     job = client.V1Job(
@@ -82,6 +92,7 @@ def create_transcoding_job(
                 spec=client.V1PodSpec(
                     restart_policy="Never",
                     service_account_name="transcoding-worker",
+                    image_pull_secrets=image_pull_secrets,
                     containers=[
                         client.V1Container(
                             name="transcoder",
@@ -116,7 +127,7 @@ def get_job_status(job_id: str) -> dict:
     ENV vars (INPUT_KEY, OUTPUT_KEY, PRESET are stored there at creation time).
 
     Args:
-        job_id: Kubernetes Job name (e.g., "transcode-20260421-191719-720p")
+        job_id: Kubernetes Job name (e.g., "transcode-1780948013-720p")
 
     Returns:
         dict with status, output_key, preset, input_key

@@ -23,7 +23,7 @@ spec:
         - name: harbor-pull-secret
       containers:
         - name: api-gateway
-          image: registry.eu01.onstackit.cloud/video-transcoding/api-gateway:latest
+          image: registry.onstackit.cloud/video-transcoding/api-gateway:latest
           imagePullPolicy: Always
           ports:
             - name: http
@@ -74,6 +74,8 @@ spec:
 
             - name: IMAGE_PULL_POLICY
               value: "Always"
+            - name: IMAGE_PULL_SECRET
+              value: "harbor-pull-secret"
             - name: TRANSCODING_WORKER_IMAGE
               valueFrom:
                 configMapKeyRef:
