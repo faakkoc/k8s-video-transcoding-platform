@@ -60,9 +60,10 @@ terraform.tfvars
 .env.*.local
 *.env
 
-# GCP Service Account Keys (WICHTIG!)
+# GCP / StackIT Service Account Keys (WICHTIG!)
 *-key.json
 *-credentials.json
+*.json.key
 service-account*.json
 
 # macOS

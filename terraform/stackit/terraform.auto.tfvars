@@ -1,0 +1,6 @@
+project_id          = "f137b33f-56c2-463a-b97b-a3dc37447902"
+region              = "eu01"
+cluster_name        = "v-tc"
+namespace           = "video-transcoding"
+uploads_bucket_name = "k8s-transcoding-uploads"
+outputs_bucket_name = "k8s-transcoding-outputs"
