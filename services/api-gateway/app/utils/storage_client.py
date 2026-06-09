@@ -59,6 +59,9 @@ class GCSClient(StorageClient):
 
     No credentials needed — authentication is handled automatically
     by GKE Workload Identity via the pod's Kubernetes ServiceAccount.
+
+    For signed URLs: uses the IAM Credentials API (access_token + service_account_email)
+    instead of a private key — compatible with Workload Identity.
     """
 
     def __init__(self):
@@ -93,13 +96,31 @@ class GCSClient(StorageClient):
             return False
 
     def get_file_url(self, bucket: str, key: str, expiration: int = 3600) -> Optional[str]:
+        """
+        Generate a signed URL using the IAM Credentials API.
+
+        Workload Identity provides only a short-lived token, not a private key.
+        generate_signed_url() with version="v4" requires signing via
+        service_account_email + access_token instead of a key file.
+
+        Requires roles/iam.serviceAccountTokenCreator on the service account.
+        """
         try:
+            import google.auth
+            import google.auth.transport.requests
             from datetime import timedelta
+
+            # Refresh credentials to get a valid token
+            credentials, _ = google.auth.default()
+            credentials.refresh(google.auth.transport.requests.Request())
+
             blob = self.client.bucket(bucket).blob(key)
             url = blob.generate_signed_url(
                 expiration=timedelta(seconds=expiration),
                 method="GET",
-                version="v4"
+                version="v4",
+                service_account_email=credentials.service_account_email,
+                access_token=credentials.token,
             )
             logger.info(f"[OK] Generated signed URL for gs://{bucket}/{key}")
             return url

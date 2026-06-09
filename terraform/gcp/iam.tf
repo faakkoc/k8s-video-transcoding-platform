@@ -50,6 +50,12 @@ resource "google_storage_bucket_iam_member" "worker_outputs" {
   member = "serviceAccount:${google_service_account.transcoding_worker.email}"
 }
 
+resource "google_service_account_iam_member" "api_gateway_token_creator" {
+  service_account_id = google_service_account.api_gateway.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.api_gateway.email}"
+}
+
 # -------------------------------------------------------------------
 # Workload Identity
 # -------------------------------------------------------------------
