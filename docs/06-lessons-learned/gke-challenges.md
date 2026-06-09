@@ -1,7 +1,7 @@
 # GKE Deployment: Challenges & Lessons Learned
 
 **Datum:** 21.04.2026
-**Aktualisiert:** 27.05.2026
+**Aktualisiert:** 10.06.2026 — Signed URL Challenge ergänzt
 **Status:** Abgeschlossen
 
 ---
@@ -44,17 +44,11 @@ success = s3_client.upload_file(
 
 ## Challenge 2: Namespace/Secret Reihenfolge (HMAC-Phase)
 
-> **Kontext:** Diese Challenge betrifft den initialen HMAC-Ansatz bei dem Terraform ein Kubernetes Secret erstellt hat. Im aktuellen Stand (Workload Identity) existiert dieses Secret nicht mehr — der Challenge-Wert liegt im Verständnis der Abhängigkeiten.
+> **Kontext:** Diese Challenge betrifft den initialen HMAC-Ansatz bei dem Terraform ein Kubernetes Secret erstellt hat. Im aktuellen Stand (Workload Identity) existiert dieses Secret nicht mehr.
 
 **Symptom:** Nach `terraform apply` fehlte das Secret `gcs-hmac-credentials` im Cluster.
 
 **Ursache:** Terraform erstellte das Kubernetes Secret über den Kubernetes Provider direkt während `terraform apply`. Wenn der Namespace noch nicht existierte, schlug die Secret-Erstellung fehl.
-
-**Fix (damals):**
-```fish
-kubectl apply -f kubernetes/gke/00-namespace.yaml  # Namespace zuerst
-terraform apply                                     # Secret danach
-```
 
 **Heutige Lösung:** Der Namespace wird in der CI/CD Pipeline vor `terraform apply` erstellt. Das Secret existiert nicht mehr — Workload Identity ersetzt es vollständig.
 
@@ -71,8 +65,6 @@ terraform apply                                     # Secret danach
 ```
 Error: couldn't find key api-gateway-access-key in Secret gcs-hmac-credentials
 ```
-
-**Ursache:** Secret wurde mit falschen Key-Namen erstellt (`access-key` statt `api-gateway-access-key`).
 
 **Heutige Relevanz:** Mit Workload Identity gibt es kein `gcs-hmac-credentials` Secret mehr. Diese Challenge ist damit obsolet — dokumentiert als Motivation für den Architektur-Wechsel.
 
@@ -138,6 +130,42 @@ new locations [us-central1-a us-central1-b us-central1-c us-central1-f]
 
 ---
 
+## Challenge 9: Signed URLs mit Workload Identity
+
+**Symptom:** `GET /api/v1/download/{job_id}` → HTTP 500 `Failed to generate download URL`
+
+**Fehlermeldung in den Logs:**
+```
+you need a private key to sign credentials. the credentials you are currently using
+<class 'google.auth.compute_engine.credentials.Credentials'> just contains a token.
+```
+
+**Ursache:** `generate_signed_url()` der `google-cloud-storage` Library erwartet standardmäßig einen Private Key zum Signieren der URL. Workload Identity stellt jedoch nur ein kurzlebiges OAuth2-Token bereit — keinen Private Key.
+
+**Fehlgeschlagener Fix-Versuch:** `roles/iam.serviceAccountTokenCreator` IAM Binding hinzufügen — allein nicht ausreichend.
+
+**Korrekter Fix:** Die `generate_signed_url()` Methode unterstützt alternativ `service_account_email` + `access_token` statt eines Private Keys. Das Token wird über die Credentials API abgerufen:
+
+```python
+import google.auth
+import google.auth.transport.requests
+
+credentials, _ = google.auth.default()
+credentials.refresh(google.auth.transport.requests.Request())
+
+url = blob.generate_signed_url(
+    expiration=timedelta(seconds=expiration),
+    method="GET",
+    version="v4",
+    service_account_email=credentials.service_account_email,
+    access_token=credentials.token,
+)
+```
+
+**Learning:** Workload Identity ist nicht vollständig transparent — Operationen die einen Private Key erfordern (wie URL-Signing) brauchen eine spezifische Implementierung. Die Fehlermeldung der Library ist zwar klar, aber der Fix ist nicht offensichtlich dokumentiert.
+
+---
+
 ## Trade-off: Transcoding-Latenz vs. Kosten bei GKE Autopilot
 
 **Beobachtung:** 3–5 Minuten vom Upload bis zum abgeschlossenen Job — obwohl FFmpeg nur ~9 Sekunden benötigt.
@@ -170,5 +198,4 @@ Upload → Job erstellt → Pod Pending
 | Leere Artifact Registry | terraform destroy ohne prevent_destroy | ✅ Behoben |
 | Autopilot Scale-Up | Zonen-Quota temporär | ✅ Selbst erholt |
 | Zonen-Konflikt us-central1 | random_shuffle + neue GCP-Zone | ✅ us-east1 genutzt |
-
-**Übergreifendes Learning:** Die HMAC-Key-Challenges (2–4) hätten durch frühzeitigen Einsatz von Workload Identity vermieden werden können. Der Aufwand für Secret-Management und Debugging rechtfertigte die Umstellung auf die native GCP-Authentifizierung.
+| Signed URLs mit Workload Identity | Private Key erwartet, Token vorhanden | ✅ IAM Credentials API genutzt |
