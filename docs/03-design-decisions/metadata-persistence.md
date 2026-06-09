@@ -1,6 +1,7 @@
 # Metadata-Persistenz: Kubernetes Job ENV vars vs. PostgreSQL
 
-**Datum:** 19.04.2026  
+**Datum:** 19.04.2026
+**Aktualisiert:** 10.06.2026 — TTL korrigiert
 **Status:** Lokal implementiert (K8s ENV), Cloud geplant (PostgreSQL)
 
 ---
@@ -64,15 +65,13 @@ def _parse_job_status(job_status) -> str:
 
 ### Limitationen
 
-**TTL-Problem:** Jobs werden nach 24 Stunden automatisch gelöscht (`ttl_seconds_after_finished: 86400`). Danach sind die Metadaten nicht mehr über die K8s API abrufbar — Downloads sind dann nicht mehr möglich.
+**TTL-Problem:** Jobs werden nach 1 Stunde automatisch gelöscht (`ttl_seconds_after_finished: 3600`). Danach sind die Metadaten nicht mehr über die K8s API abrufbar — Downloads sind dann nicht mehr möglich.
+
+**Bewusste Entscheidung:** Die 1-Stunden-TTL ist für dieses PoC-Projekt ausreichend. Die Cluster werden nach Tests wieder heruntergefahren, Videos werden direkt nach dem Test heruntergeladen. Eine längere TTL würde nur bei dauerhaft laufenden Produktions-Clustern einen Mehrwert bringen.
 
 **Keine Queries:** Es gibt keine Möglichkeit, Jobs nach Kriterien zu filtern (z.B. alle Jobs mit Preset `720p`, alle fehlgeschlagenen Jobs).
 
 **Keine persistente Historie:** Nach dem Cluster-Neustart sind alle Job-Informationen verloren.
-
-### Bewusste Entscheidung
-
-Diese Lösung wurde bewusst für das lokale Deployment gewählt. Das Ziel war es, die Plattform funktional vollständig zu machen ohne unnötige Infrastruktur-Komplexität einzuführen. Für einen lokalen Proof-of-Concept ist die 24-Stunden-TTL kein Problem — Videos werden direkt nach dem Test heruntergeladen.
 
 ---
 
@@ -80,14 +79,14 @@ Diese Lösung wurde bewusst für das lokale Deployment gewählt. Das Ziel war es
 
 ### Warum PostgreSQL für die Cloud?
 
-In der Cloud-Umgebung müssen Jobs länger als 24 Stunden abrufbar sein. Nutzer sollen Videos auch Tage nach dem Upload herunterladen können. Eine relationale Datenbank löst alle Limitationen des K8s-Ansatzes.
+In einer produktiven Umgebung müssen Jobs länger als 1 Stunde abrufbar sein. Nutzer sollen Videos auch Stunden nach dem Upload herunterladen können. Eine relationale Datenbank löst alle Limitationen des K8s-Ansatzes.
 
 **Schema:**
 
 ```sql
 CREATE TABLE jobs (
     job_id       VARCHAR(100) PRIMARY KEY,
-    status       VARCHAR(20)  NOT NULL,  -- pending, running, completed, failed
+    status       VARCHAR(20)  NOT NULL,
     input_key    VARCHAR(255) NOT NULL,
     output_key   VARCHAR(255),
     preset       VARCHAR(20)  NOT NULL,
@@ -96,26 +95,7 @@ CREATE TABLE jobs (
 );
 ```
 
-**Workflow mit PostgreSQL:**
-
-```
-Upload → Job erstellen → DB Insert (status: pending)
-              ↓
-        Job läuft → K8s Status polling → DB Update (status: running)
-              ↓
-        Job fertig → DB Update (status: completed, output_key: ...)
-              ↓
-        GET /download/{job_id} → DB Query → Presigned URL
-```
-
 ### Deployment
-
-**Lokal (wäre möglich mit Helm):**
-```bash
-helm install postgres bitnami/postgresql \
-  --namespace video-transcoding \
-  --set auth.postgresPassword=dev123
-```
 
 **GCP (Cloud SQL):**
 ```hcl
@@ -128,50 +108,31 @@ resource "google_sql_database_instance" "transcoding" {
 }
 ```
 
-**StackIT:** Analog mit dem StackIT managed PostgreSQL Service.
+**StackIT:** Analog mit dem StackIT managed PostgreSQL Flex Service.
 
-### Warum nicht lokal?
+### Warum nicht implementiert?
 
-PostgreSQL wurde bewusst nicht lokal eingeführt:
+PostgreSQL wurde als bewusste Scoping-Entscheidung nicht implementiert:
 
-- Zusätzliche Komplexität (Helm Chart, Migrations, SQLAlchemy Setup)
-- Für 24-Stunden-Tests übertrieben
-- Cloud SQL ist managed — kein selbst verwalteter Datenbankserver lokal bringt keinen Lernmehrwert
-- Die Architekturentscheidung ist dieselbe: Der Code-Unterschied ist minimal
+- Die K8s-ENV-Vars Lösung ist für Demo und PoC ausreichend
+- Cloud SQL / PostgreSQL Flex bringt zusätzliche Komplexität (Helm Chart, Migrations, SQLAlchemy, Connection Pooling)
+- Der wissenschaftliche Fokus liegt auf der Kubernetes-Orchestrierung und Cloud-Agnostik, nicht auf Datenbankintegration
+- Als Future Work dokumentiert und begründet
 
 ---
 
 ## Architektur-Vergleich
 
-| Kriterium | K8s ENV (lokal) | PostgreSQL (Cloud) |
+| Kriterium | K8s ENV (aktuell) | PostgreSQL (Future Work) |
 |-----------|-----------------|-------------------|
 | **Setup** | Keine | Terraform + Schema |
-| **Persistenz** | 24h (TTL) | Dauerhaft |
+| **Persistenz** | 1h (TTL) | Dauerhaft |
 | **Queries** | Nicht möglich | Vollständig |
 | **Historie** | Nein | Ja |
-| **Skalierung** | K8s-limitiert | Managed Service |
 | **Komplexität** | Minimal | Mittel |
-| **Geeignet für** | MVP / Demo | Production |
+| **Geeignet für** | PoC / Demo | Production |
 
 ---
 
-## Migration bei Cloud-Deployment
-
-Der Übergang von K8s ENV zu PostgreSQL erfordert minimale Code-Änderungen:
-
-```python
-# Bisher (k8s_client.py):
-job_data = get_job_status(job_id)  # liest K8s Job
-
-# Neu (mit DB):
-job_data = db.query(Job).filter_by(job_id=job_id).first()
-if not job_data:  # Fallback für Jobs vor DB-Einführung
-    job_data = get_job_status(job_id)
-```
-
-Die bestehenden Endpoints (`/jobs/{job_id}`, `/download/{job_id}`) bleiben unverändert — nur die Datenquelle wechselt.
-
----
-
-**Erstellt:** 19.04.2026  
+**Erstellt:** 19.04.2026
 **Nächstes Dokument:** [Transcoding-Technologie](./transcoding-technology.md)
