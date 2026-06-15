@@ -1,78 +1,55 @@
 # Dokumentation
 
-Diese Dokumentation begleitet die Entwicklung der Video Transcoding Platform und dient als Grundlage für die wissenschaftliche Arbeit.
+Diese Dokumentation begleitet die Entwicklung der Video Transcoding Platform
+und dient als Grundlage für die wissenschaftliche Ausarbeitung.
 
 ## Struktur
 
 ### 01 - Kubernetes Fundamentals
 Grundlagen der Container-Orchestrierung mit Kubernetes:
-- Container vs. VMs
-- Kubernetes Architektur
-- Core Concepts (Pods, Deployments, Services)
-- Relevanz für Medientechnik
-
-### 02 - Microservices Architecture
-Architektur-Patterns und Design-Entscheidungen:
-- Monolith vs. Microservices
-- Service Communication Patterns
-- Event-Driven Architecture
-- Media Workflow Requirements
+- Motivation: Warum K8s für Media-Workflows?
+- Pods, Deployments, Services, Jobs
 
 ### 03 - Design Decisions
-Technologie-Auswahl und Begründungen:
-- Technology Stack
-- FFmpeg vs. Transcoder API
-- Database Selection
-- Message Queue Choice
-- Cloud-Agnostic Design
+Technologie-Auswahl und begründete Trade-offs:
+- Storage-Strategie (emptyDir → MinIO → Cloud)
+- StorageClient-Abstraktion (GCSClient vs. S3Client)
+- Metadata-Persistenz (K8s Job ENV vs. PostgreSQL)
+- Transcoding-Technologie (FFmpeg vs. Cloud-APIs)
+- Kubernetes-Patterns (Jobs vs. Deployments, RBAC, TTL)
+
+> **Hinweis:** `02-microservices-architecture/` wurde nicht implementiert —
+> die relevanten Architektur-Entscheidungen sind in `03-design-decisions/` dokumentiert.
 
 ### 04 - Implementation
-Schritt-für-Schritt Implementierung:
-- Development Environment Setup
-- Service Implementation
-- Kubernetes Manifests
-- Local Testing
-- Debugging Strategies
+Schrittweise Implementierung mit Challenges und Lösungen:
+- API Gateway, Transcoding Worker, Kubernetes Job-Erstellung
+- Upload, Status, Download Endpoints
+- Lokaler E2E-Test (Kind + MinIO)
 
 ### 05 - Deployment
-Production Deployment:
-- GKE Setup (Google Cloud)
-- StackIT Setup
-- CI/CD Pipelines
-- Infrastructure as Code
-- Monitoring & Logging
+Production Deployments auf beiden Cloud-Plattformen:
+- GKE (Terraform, Workload Identity, CI/CD)
+- StackIT (SKE, Harbor, S3-Credentials) ✅
+- CI/CD Pipelines (GitHub Actions + WIF)
 
 ### 06 - Lessons Learned
-Erkenntnisse und Evaluation:
-- Kubernetes Benefits (konkret)
-- Challenges & Solutions
-- Performance Analysis
-- Production Readiness
-- Future Improvements
+Erkenntnisse, Challenges und Evaluation:
+- GKE-spezifische Challenges (inkl. Signed URL Fix)
+- CI/CD Challenges (Workload Identity Federation)
+- Was gut funktioniert hat
 
 ---
 
 ## Dokumentationsmethode
 
-Diese Dokumentation wird **parallel zur Entwicklung** erstellt:
+Diese Dokumentation wurde **parallel zur Entwicklung** erstellt:
 
-1. **Vor der Implementierung**: Planung, Architektur-Entscheidungen
-2. **Während der Implementierung**: Code-Snippets, Herausforderungen, Lösungen
-3. **Nach der Implementierung**: Evaluation, Lessons Learned
-
-Jeder Ordner enthält mehrere Markdown-Dateien mit spezifischen Themen.
+1. **Vor der Implementierung** — Planung, Architektur-Entscheidungen
+2. **Während der Implementierung** — Code-Snippets, Challenges, Lösungen
+3. **Nach der Implementierung** — Evaluation, Lessons Learned
 
 ---
 
-## Nutzung
-
-Diese Dokumentation dient:
-- ✅ Als Grundlage für die schriftliche Ausarbeitung
-- ✅ Als Entwicklungs-Tagebuch
-- ✅ Als Onboarding-Material für andere Entwickler
-- ✅ Als Referenz bei späteren Projekten
-
----
-
-**Begonnen:** Februar 2025  
-
+**Begonnen:** Februar 2025
+**Abgeschlossen:** Juni 2026

@@ -1,7 +1,7 @@
 """
 Upload router - handles video file uploads and job creation.
 
-Updated: 09.04.2026 - MinIO S3 integration
+Updated: 09.04.2026 - StorageClient abstraction (GCS/S3-kompatibel)
 """
 import os
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
@@ -12,7 +12,6 @@ from app.utils.storage_client import get_storage_client
 import logging
 import time
 from datetime import datetime
-from io import BytesIO
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -32,9 +31,9 @@ async def upload_video(
     Upload video file and create transcoding job.
 
     Flow:
-    1. Validate file (type, size)
-    2. Upload to MinIO (uploads bucket)
-    3. Create Kubernetes Job with S3 paths
+    1. Validate file (type)
+    2. Upload to Object Storage input bucket (GCS oder S3-kompatibel je nach STORAGE_PROVIDER)
+    3. Create Kubernetes Job with storage keys
     4. Return job_id
 
     Args:
@@ -66,19 +65,16 @@ async def upload_video(
     input_key = f"{timestamp}_{original_filename}"
     output_key = f"{timestamp}_{original_filename.rsplit('.', 1)[0]}_{preset}.mp4"
 
-    logger.info(f"[INFO] S3 Keys - Input: {input_key}, Output: {output_key}")
+    logger.info(f"[INFO] Storage Keys - Input: {input_key}, Output: {output_key}")
 
-    # 4. Upload to MinIO
+    # 4. Upload to Object Storage
     try:
         s3_client = get_storage_client()
 
-        # Read file content into memory
-        file_content = await file.read()
-        file_obj = BytesIO(file_content)
-
-        # Upload to uploads bucket
+        # file.file ist ein SpooledTemporaryFile — kein await file.read() nötig,
+        # damit wird die gesamte Datei nicht in den RAM geladen (OOM-Schutz)
         success = s3_client.upload_file(
-            file_obj,
+            file.file,
             INPUT_BUCKET,
             input_key
         )
@@ -89,7 +85,7 @@ async def upload_video(
                 detail="Failed to upload file to storage"
             )
 
-        logger.info(f"[OK] File uploaded to s3://uploads/{input_key}")
+        logger.info(f"[OK] File uploaded: {input_key}")
 
     except Exception as e:
         logger.error(f"[ERROR] Upload to S3 failed: {e}")
@@ -123,7 +119,7 @@ async def upload_video(
         # Cleanup: Delete uploaded file if job creation fails
         try:
             s3_client.delete_file(INPUT_BUCKET, input_key)
-            logger.info(f"[CLEANUP] Deleted s3://uploads/{input_key}")
+            logger.info(f"[CLEANUP] Deleted input file: {input_key}")
         except Exception:
             pass
 

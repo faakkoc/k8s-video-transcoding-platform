@@ -55,7 +55,7 @@ class DownloadResponse(BaseModel):
             "example": {
                 "job_id": "transcode-1781044594-a1b2c3-720p",
                 "output_key": "1776111023_test-video_720p.mp4",
-                "download_url": "http://minio:9000/outputs/...",
+                "download_url": "https://storage.googleapis.com/k8s-transcoding-outputs/...",
                 "expires_in_seconds": 3600
             }
         }
@@ -107,7 +107,8 @@ async def download_job(job_id: str):
     Generate a presigned download URL for a completed transcoding job.
 
     Reads the output_key from the Kubernetes Job ENV vars and
-    generates a time-limited presigned URL from MinIO.
+    generates a time-limited presigned/signed URL from Object Storage
+    (GCS auf GKE via IAM Credentials API, S3-kompatibel auf StackIT/lokal).
 
     Args:
         job_id: Job identifier (e.g., "transcode-1781044594-a1b2c3-720p")
@@ -154,7 +155,7 @@ async def download_job(job_id: str):
             detail="Could not determine output file key from job metadata"
         )
 
-    # 4. Generate presigned URL from MinIO
+    # 4. Generate presigned/signed URL from Object Storage
     s3_client = get_storage_client()
     expiration = 3600  # 1 hour
 

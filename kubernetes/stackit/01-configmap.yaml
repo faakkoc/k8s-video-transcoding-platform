@@ -20,5 +20,8 @@ data:
   # Kubernetes
   k8s_namespace: "video-transcoding"
 
+  # Name des Kubernetes Secrets mit S3-Credentials (für Worker Jobs)
+  s3_secret_name: "s3-credentials"
+
   # Worker Image aus StackIT Harbor Container Registry
   worker_image: "registry.onstackit.cloud/video-transcoding/transcoding-worker:latest"

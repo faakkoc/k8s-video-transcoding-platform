@@ -60,17 +60,13 @@ spec:
                   name: s3-credentials
                   key: secret-key
 
-            # Worker bekommt dieselben Credentials weitergegeben
-            - name: WORKER_S3_ACCESS_KEY
+            # Worker bekommt den Secret-Namen — k8s_client.py referenziert
+            # das Secret direkt via secretKeyRef (kein Plaintext in Job-Spec)
+            - name: S3_SECRET_NAME
               valueFrom:
-                secretKeyRef:
-                  name: s3-credentials
-                  key: access-key
-            - name: WORKER_S3_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: s3-credentials
-                  key: secret-key
+                configMapKeyRef:
+                  name: platform-config
+                  key: s3_secret_name
 
             - name: IMAGE_PULL_POLICY
               value: "Always"

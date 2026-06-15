@@ -3,6 +3,7 @@ Kubernetes client for creating and querying transcoding jobs.
 Updated: 26.04.2026 - Removed S3 credentials for GCS (Workload Identity)
 Updated: 27.05.2026 - Restored get_job_status and _parse_job_status
 Updated: 08.06.2026 - Optional IMAGE_PULL_SECRET for private registries (StackIT)
+Updated: 16.06.2026 - Job-ID UUID suffix (collision fix), backoff_limit=3
 """
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
@@ -59,12 +60,30 @@ def create_transcoding_job(
     ]
 
     # S3 credentials only needed for S3 provider (MinIO, StackIT)
+    # Uses secretKeyRef to avoid plaintext credentials in Job spec/etcd
     if storage_provider == "s3":
+        s3_secret_name = os.getenv("S3_SECRET_NAME", "s3-credentials")
         env_vars.extend([
-            client.V1EnvVar(name="S3_ENDPOINT",   value=os.getenv("S3_ENDPOINT", "http://minio:9000")),
-            client.V1EnvVar(name="S3_ACCESS_KEY",  value=os.getenv("WORKER_S3_ACCESS_KEY", "minioadmin")),
-            client.V1EnvVar(name="S3_SECRET_KEY",  value=os.getenv("WORKER_S3_SECRET_KEY", "minioadmin123")),
-            client.V1EnvVar(name="S3_REGION",      value=os.getenv("S3_REGION", "us-east-1")),
+            client.V1EnvVar(name="S3_ENDPOINT", value=os.getenv("S3_ENDPOINT", "http://minio:9000")),
+            client.V1EnvVar(name="S3_REGION",   value=os.getenv("S3_REGION", "us-east-1")),
+            client.V1EnvVar(
+                name="S3_ACCESS_KEY",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name=s3_secret_name,
+                        key="access-key"
+                    )
+                )
+            ),
+            client.V1EnvVar(
+                name="S3_SECRET_KEY",
+                value_from=client.V1EnvVarSource(
+                    secret_key_ref=client.V1SecretKeySelector(
+                        name=s3_secret_name,
+                        key="secret-key"
+                    )
+                )
+            ),
         ])
 
     # IMAGE_PULL_SECRET: optional, only needed for private registries (e.g. StackIT Harbor)
