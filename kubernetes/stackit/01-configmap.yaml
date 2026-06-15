@@ -13,12 +13,12 @@ data:
   s3_region:   "eu01"
 
   # Storage Provider: s3 → S3Client via boto3
-  # Credentials kommen aus dem Secret (02-secrets.yaml)
+  # Credentials kommen aus dem Secret "s3-credentials"
+  # (erstellt via kubectl aus Terraform Output, siehe docs/05-deployment/stackit-deployment.md)
   storage_provider: "s3"
 
   # Kubernetes
   k8s_namespace: "video-transcoding"
 
-  # Worker Image aus StackIT Container Registry (wird nach erstem Push gesetzt)
-  # Vorerst: gleiche Registry wie GCP oder lokales Image
+  # Worker Image aus StackIT Harbor Container Registry
   worker_image: "registry.onstackit.cloud/video-transcoding/transcoding-worker:latest"
