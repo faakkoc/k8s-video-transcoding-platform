@@ -40,8 +40,10 @@ def create_transcoding_job(
         job_id: Name of the created Kubernetes Job
     """
     import time
+    import uuid
     timestamp = int(time.time())
-    job_id = f"transcode-{timestamp}-{preset}"
+    unique_suffix = uuid.uuid4().hex[:6]
+    job_id = f"transcode-{timestamp}-{unique_suffix}-{preset}"
     namespace = os.getenv("K8S_NAMESPACE", "video-transcoding")
     storage_provider = os.getenv("STORAGE_PROVIDER", "s3")
 
@@ -83,7 +85,7 @@ def create_transcoding_job(
             labels={"app": "transcoding-worker", "job-id": job_id}
         ),
         spec=client.V1JobSpec(
-            backoff_limit=2,
+            backoff_limit=3,
             ttl_seconds_after_finished=3600,
             template=client.V1PodTemplateSpec(
                 metadata=client.V1ObjectMeta(

@@ -8,8 +8,9 @@ Validates:
 """
 
 import os
-from typing import Tuple
+from typing import Tuple, Optional
 from fastapi import UploadFile, HTTPException, status
+from app.config import get_settings
 
 
 # Allowed video formats (MIME types)
@@ -27,14 +28,14 @@ ALLOWED_EXTENSIONS = [ext for exts in ALLOWED_VIDEO_FORMATS.values() for ext in 
 
 def validate_video_file(
         file: UploadFile,
-        max_size_mb: int = 500
+        max_size_mb: Optional[int] = None
 ) -> Tuple[str, str]:
     """
     Validates uploaded video file.
 
     Args:
         file: FastAPI UploadFile object
-        max_size_mb: Maximum file size in megabytes
+        max_size_mb: Maximum file size in megabytes (default: Settings.max_upload_size_mb)
 
     Returns:
         Tuple[filename, extension]
@@ -42,6 +43,9 @@ def validate_video_file(
     Raises:
         HTTPException: If validation fails
     """
+    if max_size_mb is None:
+        max_size_mb = get_settings().max_upload_size_mb
+
     # 1. Check if file was provided
     if not file:
         raise HTTPException(
@@ -89,18 +93,21 @@ def validate_video_file(
 
 def validate_file_size(
         file_path: str,
-        max_size_mb: int = 500
+        max_size_mb: Optional[int] = None
 ) -> None:
     """
     Validates file size after upload.
 
     Args:
         file_path: Path to uploaded file
-        max_size_mb: Maximum file size in megabytes
+        max_size_mb: Maximum file size in megabytes (default: Settings.max_upload_size_mb)
 
     Raises:
         HTTPException: If file is too large
     """
+    if max_size_mb is None:
+        max_size_mb = get_settings().max_upload_size_mb
+
     file_size_bytes = os.path.getsize(file_path)
     file_size_mb = file_size_bytes / (1024 * 1024)
 

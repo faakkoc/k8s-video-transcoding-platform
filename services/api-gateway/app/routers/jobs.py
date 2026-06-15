@@ -3,17 +3,21 @@ Jobs router - job status and download endpoints.
 
 Added: 19.04.2026
 """
+import os
 from fastapi import APIRouter, HTTPException
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-from app.routers.upload import OUTPUT_BUCKET
 from app.utils.k8s_client import get_job_status
 from app.utils.storage_client import get_storage_client
 
 router = APIRouter()
+
+# Bucket-Namen werden aus der ConfigMap injiziert (siehe kubernetes/*/01-configmap.yaml)
+OUTPUT_BUCKET = os.getenv("OUTPUT_BUCKET", "outputs")
+
 
 class JobStatusResponse(BaseModel):
     """Response model for job status endpoint."""
@@ -28,7 +32,7 @@ class JobStatusResponse(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "job_id": "transcode-20260413-201024-720p",
+                "job_id": "transcode-1781044594-a1b2c3-720p",
                 "status": "completed",
                 "preset": "720p",
                 "input_key": "1776111023_test-video.mp4",
@@ -49,7 +53,7 @@ class DownloadResponse(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "job_id": "transcode-20260413-201024-720p",
+                "job_id": "transcode-1781044594-a1b2c3-720p",
                 "output_key": "1776111023_test-video_720p.mp4",
                 "download_url": "http://minio:9000/outputs/...",
                 "expires_in_seconds": 3600
@@ -67,7 +71,7 @@ async def get_job(job_id: str):
     the container ENV vars stored at job creation time.
 
     Args:
-        job_id: Job identifier (e.g., "transcode-20260413-201024-720p")
+        job_id: Job identifier (e.g., "transcode-1781044594-a1b2c3-720p")
 
     Returns:
         JobStatusResponse with current status and metadata
@@ -106,7 +110,7 @@ async def download_job(job_id: str):
     generates a time-limited presigned URL from MinIO.
 
     Args:
-        job_id: Job identifier (e.g., "transcode-20260413-201024-720p")
+        job_id: Job identifier (e.g., "transcode-1781044594-a1b2c3-720p")
 
     Returns:
         DownloadResponse with presigned URL (valid 1 hour)

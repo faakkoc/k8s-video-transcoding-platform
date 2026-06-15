@@ -70,8 +70,7 @@ k8s-video-transcoding-platform/
 │   │   │   └── utils/
 │   │   │       ├── k8s_client.py       # Dynamische K8s Job-Erstellung & Status
 │   │   │       ├── storage_client.py   # StorageClient-Abstraktion: GCSClient + S3Client
-│   │   │       ├── s3_client.py        # Legacy (vor StorageClient-Abstraktion, unbenutzt)
-│   │   │       └── validators.py       # Datei-Validierung
+│   │   │       └── validators.py       # Datei-Validierung, Settings-basierte Limits
 │   │   ├── tests/                  # (aktuell leer)
 │   │   ├── .env.example
 │   │   ├── Dockerfile

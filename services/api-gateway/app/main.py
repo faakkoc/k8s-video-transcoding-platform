@@ -26,11 +26,14 @@ app = FastAPI(
     openapi_url=f"{settings.api_prefix}/openapi.json",
 )
 
-# CORS Configuration (for frontend access)
+# CORS Configuration (Swagger UI / programmatic access)
+# allow_credentials=False, weil allow_origins=["*"] + allow_credentials=True
+# laut CORS-Spezifikation ungültig ist (Browser lehnen das ab). Es werden
+# keine Cookies/Auth-Header genutzt, daher werden Credentials nicht benötigt.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Configure properly for production
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -58,18 +61,19 @@ async def root():
 async def startup_event():
     """
     Runs on application startup.
-    Initialize connections, create directories, etc.
+
+    Logs the effective multi-cloud configuration (STORAGE_PROVIDER,
+    K8S_NAMESPACE) for debugging — these come from the environment
+    (ConfigMap), not from Settings, see app/config.py.
     """
     import os
 
-    # Create upload and output directories if they don't exist
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    os.makedirs(settings.output_dir, exist_ok=True)
+    storage_provider = os.getenv("STORAGE_PROVIDER", "s3")
+    namespace = os.getenv("K8S_NAMESPACE", "video-transcoding")
 
     print(f"[START] {settings.app_name} v{settings.app_version} started")
-    print(f"[DIR] Upload directory: {settings.upload_dir}")
-    print(f"[DIR] Output directory: {settings.output_dir}")
-    print(f"[CONFIG] Kubernetes namespace: {settings.kubernetes_namespace}")
+    print(f"[CONFIG] Storage provider: {storage_provider}")
+    print(f"[CONFIG] Kubernetes namespace: {namespace}")
 
 
 @app.on_event("shutdown")

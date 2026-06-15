@@ -1,6 +1,12 @@
 """
 Configuration management for API Gateway.
 Uses Pydantic Settings to load configuration from environment variables.
+
+Note: Kubernetes- und Storage-spezifische Konfiguration (STORAGE_PROVIDER,
+S3_*, K8S_NAMESPACE, TRANSCODING_WORKER_IMAGE, IMAGE_PULL_SECRET/POLICY,
+INPUT_BUCKET, OUTPUT_BUCKET) wird direkt via os.getenv() in k8s_client.py
+und storage_client.py gelesen, nicht über Settings — diese Werte werden
+pro Cloud/Job benötigt und ändern sich nicht zur Laufzeit.
 """
 
 from pydantic_settings import BaseSettings
@@ -18,24 +24,10 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "Video Transcoding API Gateway"
     app_version: str = "0.1.0"
-    debug: bool = False
 
     # API Configuration
     api_prefix: str = "/api/v1"
     max_upload_size_mb: int = 500  # Maximum video file size in MB
-
-    # Kubernetes Configuration
-    kubernetes_namespace: str = "video-transcoding"
-    in_cluster: bool = True  # Set to False for local development
-
-    # Storage Configuration (Future: MinIO or S3)
-    storage_type: str = "filesystem"  # Options: filesystem, s3, minio
-    upload_dir: str = "/tmp/uploads"
-    output_dir: str = "/tmp/outputs"
-
-    # Job Configuration
-    transcoding_worker_image: str = "transcoding-worker:latest"
-    job_ttl_seconds: int = 86400  # Clean up jobs after 24 hours
 
     class Config:
         env_file = ".env"

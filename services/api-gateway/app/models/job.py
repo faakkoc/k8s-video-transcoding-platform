@@ -6,10 +6,15 @@ FastAPI uses them for:
 - Automatic request validation
 - API documentation (Swagger UI)
 - Type safety
+
+Note: Job status/download response models (JobStatusResponse,
+DownloadResponse) are defined directly in app/routers/jobs.py, since
+they're only used there. This module covers the upload response and
+the shared enums used across routers.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from enum import Enum
 
@@ -39,33 +44,6 @@ class JobStatus(str, Enum):
     CANCELLED = "cancelled"  # User cancelled
 
 
-class UploadRequest(BaseModel):
-    """
-    Request model for video upload.
-
-    Optional parameters that can be sent with upload:
-    - preset: Target quality (default: 720p)
-    - filename: Custom output filename
-    """
-    preset: TranscodingPreset = Field(
-        default=TranscodingPreset.HD_720P,
-        description="Target transcoding quality"
-    )
-    output_filename: Optional[str] = Field(
-        default=None,
-        description="Custom output filename (optional)"
-    )
-
-    class Config:
-        # Example for API documentation
-        json_schema_extra = {
-            "example": {
-                "preset": "720p",
-                "output_filename": "my_video_720p.mp4"
-            }
-        }
-
-
 class JobResponse(BaseModel):
     """
     Response after creating a transcoding job.
@@ -77,79 +55,19 @@ class JobResponse(BaseModel):
     input_filename: str = Field(..., description="Original filename")
     preset: TranscodingPreset = Field(..., description="Selected quality preset")
     created_at: datetime = Field(..., description="Job creation timestamp")
+    message: Optional[str] = Field(
+        default=None,
+        description="Human-readable status message"
+    )
 
     class Config:
         json_schema_extra = {
             "example": {
-                "job_id": "transcode-abc123def456",
+                "job_id": "transcode-1781044594-a1b2c3-720p",
                 "status": "pending",
                 "input_filename": "vacation_2026.mp4",
                 "preset": "720p",
-                "created_at": "2026-02-08T10:30:00Z"
-            }
-        }
-
-
-class JobStatusResponse(BaseModel):
-    """
-    Detailed job status information.
-
-    Used for GET /api/v1/jobs/{job_id} endpoint.
-    """
-    job_id: str
-    status: JobStatus
-    input_filename: str
-    output_filename: Optional[str]
-    preset: TranscodingPreset
-    progress: Optional[int] = Field(
-        default=None,
-        ge=0,
-        le=100,
-        description="Processing progress in percent"
-    )
-    created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "job_id": "transcode-abc123def456",
-                "status": "running",
-                "input_filename": "vacation_2026.mp4",
-                "output_filename": "vacation_2026_720p.mp4",
-                "preset": "720p",
-                "progress": 45,
                 "created_at": "2026-02-08T10:30:00Z",
-                "started_at": "2026-02-08T10:30:15Z",
-                "completed_at": None,
-                "error_message": None
-            }
-        }
-
-
-class JobListResponse(BaseModel):
-    """
-    List of jobs.
-
-    Used for GET /api/v1/jobs endpoint.
-    """
-    jobs: List[JobStatusResponse]
-    total: int = Field(..., description="Total number of jobs")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "jobs": [
-                    {
-                        "job_id": "transcode-abc123",
-                        "status": "completed",
-                        "input_filename": "video1.mp4",
-                        "preset": "720p",
-                        "created_at": "2026-02-08T10:00:00Z"
-                    }
-                ],
-                "total": 1
+                "message": "Job created successfully. File uploaded to storage."
             }
         }
