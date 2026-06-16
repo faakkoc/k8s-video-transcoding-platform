@@ -23,7 +23,14 @@ k8s-video-transcoding-platform/
 │   │
 │   ├── 01-kubernetes-fundamentals/
 │   │   ├── container-orchestration.md   # Motivation: Warum K8s für Media-Workflows
-│   │   └── hands-on-basics.md           # Pods, Deployments, Services, Jobs
+│   │   ├── kubernetes-architecture.md   # Control Plane, Worker Nodes, GKE Autopilot
+│   │   ├── core-concepts.md             # Pod, Deployment, Job, Service, ConfigMap, RBAC
+│   │   └── hands-on-basics.md           # Praktische Grundlagen
+│   │
+│   ├── 02-microservices-architecture/
+│   │   ├── monolith-vs-microservices.md # Vergleich, Warum Microservices für Transcoding
+│   │   ├── service-patterns.md          # API Gateway, Strategy Pattern (StorageClient)
+│   │   └── media-workflows.md           # Transcoding-Pipeline, Jobs vs. Alternativen
 │   │
 │   ├── 03-design-decisions/
 │   │   ├── storage-strategy.md          # emptyDir → MinIO → Cloud Storage

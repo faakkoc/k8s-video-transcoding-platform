@@ -1,6 +1,7 @@
 # GKE Deployment: Step-by-Step & End-to-End Test
 
 **Datum:** 21.04.2026
+**Aktualisiert:** 16.06.2026 — Workload Identity, us-east1, CI/CD-Pipeline, Download-Endpoint
 **Status:** ✅ Erfolgreich
 
 ---
@@ -10,9 +11,9 @@
 | Tool | Version |
 |------|---------|
 | gcloud CLI | aktuell |
-| terraform | v1.14.8 |
+| terraform | v1.14.x |
 | docker | 27.x |
-| kubectl | v1.35.0 |
+| kubectl | v1.35.x |
 | Fish Shell | (lokale Entwicklungsumgebung) |
 
 Authentifizierung:
@@ -26,28 +27,12 @@ gcloud config set project k8s-transcoding-plattform
 Docker für Artifact Registry konfigurieren:
 
 ```fish
-gcloud auth configure-docker us-central1-docker.pkg.dev
+gcloud auth configure-docker us-east1-docker.pkg.dev
 ```
 
 ---
 
-## Phase 1: Namespace erstellen (vor Terraform!)
-
-Der Kubernetes Namespace muss **vor** `terraform apply` existieren, da Terraform das HMAC-Secret direkt über die K8s API anlegt. Dafür wird zuerst die GKE Cluster-Verbindung hergestellt:
-
-```fish
-# GKE Credentials holen
-gcloud container clusters get-credentials video-transcoding \
-  --region us-central1 \
-  --project k8s-transcoding-plattform
-
-# Namespace anlegen
-kubectl apply -f kubernetes/gke/00-namespace.yaml
-```
-
----
-
-## Phase 2: Terraform Apply
+## Phase 1: Terraform Apply
 
 ```fish
 cd terraform/gcp
@@ -56,69 +41,83 @@ terraform plan    # Änderungen prüfen
 terraform apply   # Infrastruktur erstellen
 ```
 
-`terraform apply` provisioniert 24 Ressourcen:
+`terraform apply` provisioniert folgende Ressourcen:
 - GCP APIs aktivieren
-- GKE Autopilot Cluster
+- GKE Autopilot Cluster (us-east1)
 - GCS Buckets (uploads + outputs)
-- Artifact Registry
-- Service Accounts + IAM Bindings
-- HMAC Keys
-- Kubernetes Secret `gcs-hmac-credentials`
+- Artifact Registry (`us-east1-docker.pkg.dev`)
+- Service Accounts (`api-gateway`, `transcoding-worker`)
+- Workload Identity Bindings (inkl. `roles/iam.serviceAccountTokenCreator` für Signed URLs)
+- Workload Identity Federation für GitHub Actions CI/CD
 
 **Dauer:** ca. 10–15 Minuten (GKE Autopilot Cluster-Erstellung dauert am längsten)
 
+> **Hinweis:** Es gibt kein manuell verwaltetes Kubernetes Secret für Storage-Credentials —
+> Authentication läuft vollständig über Workload Identity. Der Pod-ServiceAccount
+> wird automatisch mit dem GCP-ServiceAccount verknüpft.
+
 ---
 
-## Phase 3: Kubernetes Manifests anwenden
+## Phase 2: Credentials holen & Manifests anwenden
+
+Nach jedem `terraform apply` müssen die GKE Credentials neu geholt werden:
 
 ```fish
+gcloud container clusters get-credentials video-transcoding \
+  --region us-east1 \
+  --project k8s-transcoding-plattform
+```
+
+Manifests anwenden:
+
+```fish
+kubectl apply -f kubernetes/gke/00-namespace.yaml
 kubectl apply -f kubernetes/gke/01-configmap.yaml
 kubectl apply -f kubernetes/gke/02-service-accounts.yaml
 kubectl apply -f kubernetes/gke/api-gateway/
 ```
 
-Secret prüfen (sollte von Terraform bereits erstellt sein):
+Prüfen:
 
 ```fish
-kubectl get secrets -n video-transcoding
-# NAME                   TYPE     DATA   AGE
-# gcs-hmac-credentials   Opaque   4      5m
-```
-
----
-
-## Phase 4: Docker Images bauen und pushen
-
-Nach jedem `terraform apply` oder Code-Änderung müssen die Images neu gebaut und gepusht werden, da `terraform destroy` die Artifact Registry inklusive Images löscht:
-
-```fish
-# API Gateway
-docker build -t us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/api-gateway:latest \
-  services/api-gateway/
-docker push us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/api-gateway:latest
-
-# Transcoding Worker
-docker build -t us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/transcoding-worker:latest \
-  services/transcoding-worker/
-docker push us-central1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/transcoding-worker:latest
-```
-
----
-
-## Phase 5: Deployment starten und prüfen
-
-```fish
-kubectl rollout restart deployment/api-gateway -n video-transcoding
-kubectl rollout status deployment/api-gateway -n video-transcoding
-# deployment "api-gateway" successfully rolled out
-
 kubectl get pods -n video-transcoding
 # NAME                           READY   STATUS    RESTARTS   AGE
 # api-gateway-7f7d974bbb-2f6v8   1/1     Running   0          56s
 # api-gateway-7f7d974bbb-mvrvk   1/1     Running   0          2m53s
 ```
 
-Public IP des LoadBalancers ermitteln:
+---
+
+## Phase 3: Docker Images (CI/CD oder manuell)
+
+**Via CI/CD Pipeline (Normalfall):**
+
+Jeder Push auf `main` triggert automatisch Build & Push zur Artifact Registry.
+`terraform apply` erfolgt manuell via `Actions → Deploy to GCP → Run workflow → apply=true`.
+
+**Manuell (nach frischem terraform apply):**
+
+```fish
+# API Gateway
+docker build -t us-east1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/api-gateway:latest \
+  services/api-gateway/
+docker push us-east1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/api-gateway:latest
+
+# Transcoding Worker
+docker build -t us-east1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/transcoding-worker:latest \
+  services/transcoding-worker/
+docker push us-east1-docker.pkg.dev/k8s-transcoding-plattform/transcoding/transcoding-worker:latest
+```
+
+Danach Rollout:
+
+```fish
+kubectl rollout restart deployment/api-gateway -n video-transcoding
+kubectl rollout status deployment/api-gateway -n video-transcoding
+# deployment "api-gateway" successfully rolled out
+```
+
+Public IP ermitteln:
 
 ```fish
 kubectl get svc -n video-transcoding
@@ -126,16 +125,9 @@ kubectl get svc -n video-transcoding
 # api-gateway   LoadBalancer   10.x.x.x      <EXTERNAL-IP>   80:xxxxx/TCP
 ```
 
-Health Check:
-
-```fish
-curl http://<EXTERNAL-IP>/api/v1/health
-# {"status": "healthy", "service": "Video Transcoding API Gateway"}
-```
-
 ---
 
-## Phase 6: End-to-End Test
+## Phase 4: End-to-End Test
 
 ### Schritt 1: Video hochladen
 
@@ -151,11 +143,12 @@ curl -X POST http://<EXTERNAL-IP>/api/v1/upload \
 
 ```json
 {
-  "job_id": "transcode-20260421-191719-720p",
+  "job_id": "transcode-1781044594-a1b2c3-720p",
   "status": "pending",
   "input_filename": "test-video.mp4",
   "preset": "720p",
-  "created_at": "2026-04-21T19:17:19.000Z"
+  "created_at": "2026-06-09T22:29:54.000Z",
+  "message": "Job created successfully. File uploaded to storage."
 }
 ```
 
@@ -164,79 +157,85 @@ curl -X POST http://<EXTERNAL-IP>/api/v1/upload \
 ```fish
 kubectl get pods -n video-transcoding -w
 
-# NAME                                   READY   STATUS              AGE
-# api-gateway-7f7d974bbb-2f6v8           1/1     Running             5m
-# api-gateway-7f7d974bbb-mvrvk           1/1     Running             7m
-# transcode-20260421-191719-720p-vqkt8   0/1     Pending             0s
-# transcode-20260421-191719-720p-vqkt8   0/1     Pending             50s  ← GKE Autopilot fährt Node hoch
-# transcode-20260421-191719-720p-vqkt8   0/1     Pending             60s
-# transcode-20260421-191719-720p-vqkt8   0/1     ContainerCreating   60s
-# transcode-20260421-191719-720p-vqkt8   1/1     Running             94s
-# transcode-20260421-191719-720p-vqkt8   0/1     Completed           3m30s
+# NAME                                         READY   STATUS              AGE
+# api-gateway-7f7d974bbb-2f6v8                 1/1     Running             5m
+# api-gateway-7f7d974bbb-mvrvk                 1/1     Running             7m
+# transcode-1781044594-a1b2c3-720p-vqkt8       0/1     Pending             0s
+# transcode-1781044594-a1b2c3-720p-vqkt8       0/1     Pending             50s  ← Autopilot fährt Node hoch
+# transcode-1781044594-a1b2c3-720p-vqkt8       0/1     ContainerCreating   60s
+# transcode-1781044594-a1b2c3-720p-vqkt8       1/1     Running             94s
+# transcode-1781044594-a1b2c3-720p-vqkt8       0/1     Completed           3m30s
 ```
 
-Der Pod ist zunächst `Pending` weil GKE Autopilot einen neuen Node hochfahren muss — das dauert ca. 60–90 Sekunden.
+Der Pod ist zunächst `Pending` weil GKE Autopilot einen neuen Node hochfahren muss — ca. 60–90 Sekunden Cold-Start-Latenz.
 
 ### Schritt 3: Worker Logs
 
 ```fish
-kubectl logs -n video-transcoding transcode-20260421-191719-720p-vqkt8 --follow
+kubectl logs -n video-transcoding transcode-1781044594-a1b2c3-720p-vqkt8
 ```
 
 ```
+[INIT] Storage: GCS (Workload Identity)
 [INIT] Transcoding Worker
-   Job ID: transcode-20260421-191719-720p
+   Job ID: transcode-1781044594-a1b2c3-720p
    Preset: 720p
-   S3 Endpoint: https://storage.googleapis.com
-   Input: s3://k8s-transcoding-uploads/1776799037_test-video.mp4
-   Output: s3://k8s-transcoding-outputs/1776799037_test-video_720p.mp4
+   Input: k8s-transcoding-uploads/1781044438_test-video.mp4
+   Output: k8s-transcoding-outputs/1781044438_test-video_720p.mp4
 ============================================================
-TRANSCODING JOB: transcode-20260421-191719-720p
+TRANSCODING JOB: transcode-1781044594-a1b2c3-720p
 ============================================================
-[START] Downloading input from GCS...
+[START] Downloading input...
 [OK] Downloaded 0.07 MB
 [START] Starting FFmpeg transcoding...
-   Command: ffmpeg -i /tmp/1776799037_test-video.mp4 -y -c:v libx264 -b:v 2500k
+   Command: ffmpeg -i /tmp/1781044438_test-video.mp4 -y -c:v libx264 -b:v 2500k
             -vf scale=1280x720 -r 30 -preset medium -profile:v high
             -c:a aac -b:a 128k -movflags +faststart
-            /tmp/1776799037_test-video_720p.mp4
+            /tmp/1781044438_test-video_720p.mp4
 [OK] Transcoding completed in 8.9 seconds
-[START] Uploading output to GCS...
-[OK] Uploaded 0.38 MB to s3://k8s-transcoding-outputs/1776799037_test-video_720p.mp4
+[START] Uploading output...
+[OK] Uploaded 0.38 MB to k8s-transcoding-outputs/1781044438_test-video_720p.mp4
 [CLEANUP] Removing temporary files...
-   Deleted: /tmp/1776799037_test-video.mp4
-   Deleted: /tmp/1776799037_test-video_720p.mp4
 ============================================================
-JOB COMPLETED SUCCESSFULLY: transcode-20260421-191719-720p
+JOB COMPLETED SUCCESSFULLY: transcode-1781044594-a1b2c3-720p
 ============================================================
 ```
 
-### Schritt 4: Output in GCS prüfen
-
-In der GCP Console unter `k8s-transcoding-outputs`:
-
-```
-Name                                    Size
-1776799037_test-video_720p.mp4         393.9 KB
-```
-
-### Schritt 5: Job Status abfragen
+### Schritt 4: Job Status abfragen
 
 ```fish
-curl http://<EXTERNAL-IP>/api/v1/jobs/transcode-20260421-191719-720p
+curl http://<EXTERNAL-IP>/api/v1/jobs/transcode-1781044594-a1b2c3-720p
 ```
 
 ```json
 {
-  "job_id": "transcode-20260421-191719-720p",
+  "job_id": "transcode-1781044594-a1b2c3-720p",
   "status": "completed",
   "preset": "720p",
-  "input_key": "1776799037_test-video.mp4",
-  "output_key": "1776799037_test-video_720p.mp4",
-  "start_time": "2026-04-21T19:17:19Z",
-  "completion_time": "2026-04-21T19:20:49Z"
+  "input_key": "1781044438_test-video.mp4",
+  "output_key": "1781044438_test-video_720p.mp4",
+  "start_time": "2026-06-09T22:29:54Z",
+  "completion_time": "2026-06-09T22:30:23Z"
 }
 ```
+
+### Schritt 5: Download URL generieren
+
+```fish
+curl http://<EXTERNAL-IP>/api/v1/download/transcode-1781044594-a1b2c3-720p
+```
+
+```json
+{
+  "job_id": "transcode-1781044594-a1b2c3-720p",
+  "output_key": "1781044438_test-video_720p.mp4",
+  "download_url": "https://storage.googleapis.com/k8s-transcoding-outputs/...?X-Goog-Signature=...",
+  "expires_in_seconds": 3600
+}
+```
+
+Die Signed URL wird via IAM Credentials API generiert (Workload Identity kompatibel,
+kein Private Key nötig) — sie ist 1 Stunde gültig.
 
 ---
 
@@ -246,26 +245,26 @@ curl http://<EXTERNAL-IP>/api/v1/jobs/transcode-20260421-191719-720p
 |---------|----------|
 | Upload (POST /upload) | ✅ HTTP 201, Job erstellt |
 | GCS Upload (Input) | ✅ `k8s-transcoding-uploads` |
-| Kubernetes Job | ✅ Created, Completed |
+| Kubernetes Job | ✅ Erstellt, Completed |
 | GKE Autopilot Scale-Up | ✅ Neuer Node in ~90s |
 | FFmpeg Transcoding | ✅ 8.9 Sekunden |
-| GCS Upload (Output) | ✅ 393.9 KB in `k8s-transcoding-outputs` |
+| GCS Upload (Output) | ✅ 380 KB in `k8s-transcoding-outputs` |
 | Job Status API | ✅ `status: completed` |
+| Download URL (Signed URL) | ✅ HTTP 200, GCS Signed URL |
 
 ---
 
 ## Infrastruktur abbauen
 
-Nach dem Test kann die gesamte Infrastruktur mit einem Befehl abgebaut werden:
-
 ```fish
 cd terraform/gcp
-terraform destroy
+terraform destroy -target=module.gke \
+  -target=google_service_account_iam_member.api_gateway_workload_identity \
+  -target=google_service_account_iam_member.worker_workload_identity
 ```
 
-`terraform destroy` löscht alle 24 Ressourcen inklusive GKE Cluster, GCS Buckets und Artifact Registry. Der Remote State-Bucket (`k8s-transcoding-tfstate`) wird nicht gelöscht — er muss manuell entfernt werden, falls nicht mehr benötigt.
-
-**Hinweis:** Nach einem `terraform destroy` und erneutem `terraform apply` müssen die Docker Images neu gebaut und gepusht werden, da die Artifact Registry gelöscht wurde. Eine CI/CD Pipeline würde diesen Schritt automatisieren.
+Artifact Registry, GCS Buckets und WIF-Ressourcen haben `prevent_destroy = true`
+und bleiben erhalten — nur der GKE Cluster wird abgebaut.
 
 ---
 
