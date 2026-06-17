@@ -101,14 +101,41 @@ Aktuellste supported Version zum Zeitpunkt des Deployments.
 ```fish
 # StackIT CLI installieren (Homebrew)
 brew install stackit
+```
 
-# Service Account Key ENV setzen
+**ENV-Variablen setzen** — zwei Optionen, je nach gewünschter Persistenz:
+
+**Option A — nur für die aktuelle Shell-Session:**
+
+```fish
 set -x STACKIT_SERVICE_ACCOUNT_KEY_PATH ~/.stackit/service-account-key.json
-
-# State Bucket Credentials (aus Portal)
 set -x AWS_ACCESS_KEY_ID <state-bucket-access-key>
 set -x AWS_SECRET_ACCESS_KEY <state-bucket-secret-key>
 ```
+
+Muss bei jeder neuen Shell erneut ausgeführt werden.
+
+**Option B — dauerhaft über Fish-Sessions hinweg (`-Ux`, universal):**
+
+```fish
+set -Ux STACKIT_SERVICE_ACCOUNT_KEY_PATH ~/.stackit/service-account-key.json
+set -Ux AWS_ACCESS_KEY_ID <state-bucket-access-key>
+set -Ux AWS_SECRET_ACCESS_KEY <state-bucket-secret-key>
+```
+
+Fish speichert universal Variablen automatisch im internen Variable Store —
+kein Sourcen einer Config-Datei nötig (anders als bei `.zshrc`/`.bashrc`).
+Die Variablen sind danach in jeder neuen Fish-Session automatisch verfügbar.
+
+**Wieder entfernen** (z.B. nach Projektabschluss):
+
+```fish
+set -e STACKIT_SERVICE_ACCOUNT_KEY_PATH
+set -e AWS_ACCESS_KEY_ID
+set -e AWS_SECRET_ACCESS_KEY
+```
+
+`set -e` löscht die Variable auch aus dem universal store — kein Neustart nötig.
 
 ---
 
