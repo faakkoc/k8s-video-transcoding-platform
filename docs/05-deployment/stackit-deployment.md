@@ -277,6 +277,23 @@ StackIT unterstützt kein Workload Identity Federation → Service Account Key
 müsste als GitHub Secret hinterlegt werden. Das ist ein Schritt zurück
 gegenüber GCP (kein langlebiger Key als Secret), aber für ein PoC akzeptabel.
 
+**Konkret beobachtetes Risiko (17.06.2026):** Nach einem Code-Refactoring
+(`k8s_client.py` — S3-Credentials von Plaintext-ENV auf `secretKeyRef`
+umgestellt) lief der Cluster weiterhin mit dem alten, ungepatchten Image
+weiter — der Job griff auf die alten Hardcoded-Fallback-Werte
+(`minioadmin`/`minioadmin123`) zurück und schlug mit `403 Forbidden` beim
+S3-Download fehl. Bei GCP hätte die CI/CD-Pipeline das Image automatisch
+bei jedem Push neu gebaut; bei StackIT blieb der veraltete Stand unbemerkt
+im Cluster, bis der E2E-Test fehlschlug.
+
+**Fix:** `docker build` + `docker push` zur Harbor Registry, danach
+`kubectl rollout restart deployment/api-gateway`. Dieser manuelle Schritt
+muss nach **jeder** Code-Änderung an `services/api-gateway/` oder
+`services/transcoding-worker/` wiederholt werden — eine direkte
+Konsequenz der fehlenden CI/CD und ein gutes Beispiel dafür, welches
+konkrete Risiko der "Kein CI/CD"-Trade-off in der Cloud-Vergleichstabelle
+in der Praxis bedeutet.
+
 ### 2. IMAGE_PULL_SECRET manuell gepatcht
 
 Das `IMAGE_PULL_SECRET` für Worker-Jobs wurde beim ersten Deployment per

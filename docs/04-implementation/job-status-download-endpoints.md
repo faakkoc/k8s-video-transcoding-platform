@@ -105,6 +105,8 @@ Generiert eine Presigned URL für das transcodierte Video. Fehlerbehandlung:
 
 Presigned URLs sind zeitlich begrenzt (1 Stunde) und enthalten alle nötigen Credentials in der URL selbst — der Client braucht keinen direkten MinIO-Zugang.
 
+**Nicht single-use:** Presigned/Signed URLs sind reine zeitbasierte Autorisierungs-Tokens, kein einmal verwendbares Ticket. Solange `expires_in_seconds` nicht abgelaufen ist, kann dieselbe URL beliebig oft und auch parallel von mehreren Clients aufgerufen werden — es gibt keinen serverseitigen "bereits verwendet"-Zustand. Für echtes Single-Use müsste eine eigene Invalidierung (z.B. Token-Tracking in einer Datenbank) implementiert werden — das ist weder bei GCS Signed URLs noch bei S3 Presigned URLs eingebaut.
+
 ---
 
 ## Test-Ergebnisse
